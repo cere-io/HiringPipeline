@@ -1,0 +1,29 @@
+# HiringPipeline Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2026-02-24
+
+## Active Technologies
+
+- TypeScript / Node.js + `zod` (for schema validation), `CubbyClient` (CEF SDK) (001-bridge-traits-cubby)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+npm test && npm run lint
+
+## Code Style
+
+TypeScript / Node.js: Follow standard conventions
+
+## Recent Changes
+
+- 001-bridge-traits-cubby: Added TypeScript / Node.js + `zod` (for schema validation), `CubbyClient` (CEF SDK)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
