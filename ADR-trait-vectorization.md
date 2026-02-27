@@ -13,7 +13,8 @@ We need to ingest candidates from Notion, vectorise their nuanced traits (e.g. s
 The first lab functionality focuses purely on extracting the unstructured data, parsing it into structured schemas, rating the nuance, and writing it to the `hiring-traits` Cubby.
 
 **Key Architecture Decisions:**
-- **Extraction Model:** Gemini 2.5 Pro (via Vercel AI SDK)
+- **Extraction Model:** Gemini 2.5 Pro (via Vercel AI SDK). We built a Next.js `trait-tester` sandbox that successfully proves multi-PDF and batch parsing capabilities natively before pushing to the pipeline.
+- **Nuanced Trait Vectorization:** We updated the `001-bridge-traits-cubby` specs to explicitly capture nuanced signals (e.g., Waterloo/Toronto over standard schools, reverse-engineering SQLite). 
 - **Nuanced Trait Ratings:** Instead of just extracting strings, the AI scores each extracted trait from `0-10`.
 - **Conclusive Score:** A deterministic weighted sum of the trait ratings (Hard Things Done x3.5, Company Signals x2.5, Open Source x2.0, Hackathons x1.0, Schools x1.0) yields a final `conclusive_score` out of 100.
 - **Storage:** Persisted in the `hiring-traits` Cubby using the `CubbyClient`.
