@@ -9,7 +9,7 @@
 
 ### User Story 1 - Trait Extraction on Candidate Ingest (Priority: P1)
 
-When a new candidate is processed through `candidate-processor.ts`, the system extracts structured trait signals (skills, experience level, company stages, education) and writes them to the `hiring-traits` cubby. The existing Notion write continues unchanged. The trait signal must not contain PII (no names, emails, phone numbers, or raw resume text).
+When a new candidate is processed through `candidate-processor.ts`, the system extracts structured trait signals (skills, experience level, company stages, education, schools, hard things done, hackathons, open source contributions, company signals) and writes them to the `hiring-traits` cubby. The existing Notion write continues unchanged. The trait signal must not contain PII (no names, emails, phone numbers, or raw resume text).
 
 **Why this priority**: This is the foundational data bridge. Without traits in cubbies, no downstream agent (Scorer, Distillation) can function. Everything else depends on this.
 
@@ -17,7 +17,7 @@ When a new candidate is processed through `candidate-processor.ts`, the system e
 
 **Acceptance Scenarios**:
 
-1. **Given** a new candidate webhook from Wellfound, **When** `candidate-processor.ts` completes scoring, **Then** a trait record is written to `hiring-traits` cubby with key `{candidate_id}` containing structured signals (skills array, years of experience, company stages, education level)
+1. **Given** a new candidate webhook from Wellfound, **When** `candidate-processor.ts` completes scoring, **Then** a trait record is written to `hiring-traits` cubby with key `{candidate_id}` containing structured signals (skills array, years of experience, company stages, education level, scored items for schools, hard things done, hackathons, open source contributions, company signals, and a final weighted conclusive_score)
 2. **Given** a new candidate webhook from Join.com, **When** `candidate-processor.ts` completes scoring, **Then** the same trait extraction and cubby write occurs
 3. **Given** a candidate whose resume contains PII, **When** traits are extracted, **Then** the cubby payload contains zero PII — no names, emails, phone numbers, addresses, or raw resume text
 
@@ -56,7 +56,7 @@ All trait records written to the cubby are validated against a zod schema before
 
 ### Key Entities
 
-- **TraitSignal**: Anonymized structured decomposition of a candidate. Contains: skills (string array), years_of_experience (number), company_stages (string array — e.g., "startup", "series_b", "public"), education_level (string), source_completeness (object indicating which data sources were available), extracted_at (ISO timestamp)
+- **TraitSignal**: Anonymized structured decomposition of a candidate. Contains: skills (string array), years_of_experience (number), company_stages (string array — e.g., "startup", "series_b", "public"), education_level (string), schools (object with items and rating), hard_things_done (object with items and rating), hackathons (object with items and rating), open_source_contributions (object with items and rating), company_signals (object with items and rating), conclusive_score (number), human_feedback_score (number), source_completeness (object indicating which data sources were available), extracted_at (ISO timestamp). This enables vectorization and a human feedback loop to reshuffle and refine trait signals.
 - **CandidateRecord**: Existing entity in HR-2026-E2E. Contains resume, LinkedIn data, ATS metadata, AI scores. Lives in Notion.
 - **CubbyClient**: Abstraction for cubby read/write. Provides `put(cubby, key, value)`, `get(cubby, key)`, `list(cubby)` with built-in retry and logging.
 

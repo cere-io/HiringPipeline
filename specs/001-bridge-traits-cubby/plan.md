@@ -5,7 +5,7 @@
 
 ## Summary
 
-Extract structured trait signals (skills, experience, education, etc.) from incoming candidates processed by `candidate-processor.ts`, validate them against a strict schema, and persist them in the `hiring-traits` CEF Cubby using `CubbyClient`. The implementation ensures no PII is stored and maintains the existing Notion-first integration pattern.
+Extract structured trait signals (skills, experience, education, specific schools, hard things done, hackathons, open source contributions, company signals, etc.) from incoming candidates processed by `candidate-processor.ts`. Score each nuanced trait (0-10) and calculate a weighted `conclusive_score`. Validate them against a strict schema, and persist them in the `hiring-traits` CEF Cubby using `CubbyClient`. The implementation ensures no PII is stored and maintains the existing Notion-first integration pattern. This lays the groundwork for a human feedback loop and talent trait vectorization.
 
 ## Technical Context
 
