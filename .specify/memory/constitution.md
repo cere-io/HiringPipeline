@@ -1,14 +1,12 @@
 <!--
 Sync Impact Report
 ==================
-Version Change: NEW → 1.0.0
+Version Change: 1.0.0 → 1.1.0
 Principles Added:
   - Spec-Driven Development (SDD-First)
   - Testing & Validation Standards
   - Cubby Access & Data Architecture
   - Agent Design & Communication
-  - Webhook & Ingestion Patterns
-  - Error Handling & Dual-Write Safety
   - TypeScript Strictness & Conventions
   - Observability & Accountability
 
@@ -124,64 +122,7 @@ Each agent has a single responsibility and writes to exactly one cubby. Agent-to
 
 **Rationale**: Single-responsibility agents are independently testable, deployable, and replaceable. RAFT decouples the pipeline — if the Scorer is down, traits still get extracted and queued.
 
-### V. Webhook & Ingestion Patterns
-
-All webhook handlers MUST be idempotent. Duplicate deliveries from Wellfound/Join.com are expected.
-
-**Rules**:
-- ALWAYS deduplicate using composite key: `{source}:{candidate_email_hash}:{applied_at}`
-- ALWAYS validate webhook signatures before processing
-- ALWAYS return 200 to the webhook sender before doing async work (acknowledge fast, process later)
-- NEVER block the webhook handler on cubby writes or Notion API calls
-
-```typescript
-// CORRECT — acknowledge first, process async
-app.post('/webhook/wellfound', async (req, res) => {
-  if (!verifySignature(req)) return res.status(401).end();
-  const dedupKey = buildDedupKey(req.body);
-  if (await isDuplicate(dedupKey)) return res.status(200).end();
-  res.status(200).end();
-  await processCandidate(req.body); // async, non-blocking
-});
-```
-
-**Rationale**: ATS providers retry on timeout. If we block on Notion + cubby writes (which can take seconds), we get duplicate candidates. Acknowledge fast, process safely.
-
-### VI. Error Handling & Dual-Write Safety
-
-The pipeline writes to both Notion (existing) and cubbies (new). Partial failures MUST be handled gracefully.
-
-**Rules**:
-- ALWAYS use custom error classes: `CubbyWriteError`, `NotionSyncError`, `SchemaValidationError`
-- ALWAYS wrap errors with cause chain: `new CubbyWriteError('Failed to write traits', { cause: originalError })`
-- NEVER swallow errors silently — log at minimum, throw if the operation is critical
-- NEVER log and throw the same error (pick one)
-
-**Dual-Write Strategy**:
-1. Write to Notion first (existing behavior, must not break)
-2. Write to cubby second (new behavior, additive)
-3. If Notion succeeds but cubby fails: log error, do NOT retry Notion, retry cubby with exponential backoff (max 3 attempts)
-4. If Notion fails: abort entirely (cubby write depends on Notion success for data consistency)
-
-```typescript
-// CORRECT
-try {
-  await notionStore.writeCandidate(candidateId, data);
-} catch (err) {
-  throw new NotionSyncError('Notion write failed, aborting', { cause: err });
-}
-
-try {
-  await cubbyClient.put('hiring-traits', candidateId, traitSignal);
-} catch (err) {
-  logger.error(new CubbyWriteError('Cubby write failed after Notion success', { cause: err }));
-  await retryCubbyWrite('hiring-traits', candidateId, traitSignal, { maxRetries: 3 });
-}
-```
-
-**Rationale**: Notion is the source of truth today. Cubbies are additive. We cannot break the existing pipeline to add the new one. Notion-first ensures backward compatibility.
-
-### VII. TypeScript Strictness & Conventions
+### V. TypeScript Strictness & Conventions
 
 **Rules**:
 - `strict: true` in tsconfig — no exceptions
@@ -202,7 +143,7 @@ try {
 
 **Rationale**: TypeScript strict mode catches entire classes of runtime errors at compile time. Consistent naming reduces cognitive load across the team.
 
-### VIII. Observability & Accountability
+### VI. Observability & Accountability
 
 **Rules**:
 - Every cubby write MUST produce a structured log entry: `{ event: 'cubby_write', cubby, key, success, duration_ms }`
@@ -227,15 +168,13 @@ try {
 2. No linter errors (eslint --fix)
 3. Schema validation on all cubby writes
 4. No PII in cubby payloads
-5. Dual-write error handling verified
-6. Type safety confirmed (no `any`)
+5. Type safety confirmed (no `any`)
 
 ### Before Production
 
 1. Integration tests pass with mocked external services
-2. Webhook idempotency verified
-3. Observability logs confirmed (cubby writes, agent runs)
-4. Rollback plan documented
+2. Observability logs confirmed (cubby writes, agent runs)
+3. Rollback plan documented
 
 ## Governance
 
@@ -260,4 +199,4 @@ try {
 - PII in cubby payloads is a blocking issue regardless of other approvals
 - Constitution supersedes all other coding practices
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-20
+**Version**: 1.1.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-24

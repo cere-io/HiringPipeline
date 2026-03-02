@@ -57,8 +57,29 @@ Run from Cursor (`/speckit.*`):
   templates/               # Spec, plan, tasks, checklist templates
   scripts/bash/            # Automation scripts
   features/                # Feature specs (created per feature)
-spec.md                    # Full CEF integration specification
+specs/
+  001-bridge-traits-cubby/ # Feature: Bridge candidate traits to cubby
+    spec.md                # Feature specification
+    plan.md                # Technical plan
+    data-model.md          # Data model
+    research.md            # Research notes
+    quickstart.md          # Quick start guide
+    checklists/            # Requirements checklists
+    contracts/             # Zod schemas (trait-signal-schema.ts)
+package.json               # Node dependencies (zod)
 ```
+
+## Current Work
+
+| Feature | Branch | Status |
+|---------|--------|--------|
+| 001 — Bridge candidate traits to cubby | `001-bridge-traits-cubby` | 🔨 In Progress |
+
+**What's in scope:** Extract `TraitSignal` from `candidate-processor.ts` → validate with zod → write to `hiring-traits` cubby. No PII in payload. Notion write unchanged.
+
+**Next steps:** Implement `trait-extractor.ts`, `cubby-integration.ts`, and vitest tests per [plan.md](specs/001-bridge-traits-cubby/plan.md).
+
+---
 
 ## Quick Start
 
