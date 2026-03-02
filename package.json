@@ -1,0 +1,28 @@
+{
+  "name": "hiringpipeline",
+  "version": "1.0.0",
+  "description": "CEF integration for [HR-2026-E2E](https://github.com/cere-io/HR-2026-E2E). Wires the existing hiring pipeline into cubbies so every hire makes the next one smarter.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cere-io/HiringPipeline.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cere-io/HiringPipeline/issues"
+  },
+  "homepage": "https://github.com/cere-io/HiringPipeline#readme",
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
