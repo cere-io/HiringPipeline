@@ -52,20 +52,32 @@ export interface VectorMatch {
 // === Hiring Pipeline Domain Types ===
 
 export interface TraitWeights {
-    technical_depth: number;
-    communication: number;
-    problem_solving: number;
-    system_design: number;
+    skills: number;
+    years_of_experience: number;
+    company_stages: number;
+    education_level: number;
+    schools: number;
+    hard_things_done: number;
+    hackathons: number;
+    open_source_contributions: number;
+    company_signals: number;
 }
 
 export interface CandidateTraits {
-    id: string;
-    technical_depth: number; // 0-10
-    communication: number;   // 0-10
-    problem_solving: number; // 0-10
-    system_design: number;   // 0-10
+    candidate_id: string; // From Data Model
     skills: string[];
-    raw_evidence: Record<string, string>;
+    years_of_experience: number;
+    company_stages: string[];
+    education_level: string;
+    schools: { items: string[], rating: number };
+    hard_things_done: { items: string[], rating: number };
+    hackathons: { items: string[], rating: number };
+    open_source_contributions: { items: string[], rating: number };
+    company_signals: { items: string[], rating: number };
+    conclusive_score: number;
+    human_feedback_score?: number;
+    source_completeness: { has_resume: boolean, has_linkedin: boolean };
+    extracted_at: string;
 }
 
 export interface CandidateScore {

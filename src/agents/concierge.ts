@@ -13,22 +13,23 @@ export async function handle(event: Event, context: Context) {
         return { success: false, error: 'Missing candidateId, resumeText, or role' };
     }
 
-    context.log('Starting hiring pipeline for candidate:', candidateId, 'Role:', role);
+    context.log('[CONCIERGE] NEW_APPLICATION received → dispatching to child agents');
+    context.log('[CONCIERGE] Candidate:', candidateId, '| Role:', role);
 
     try {
         // 1. Extract Traits
-        context.log('Step 1: Extracting Traits');
+        context.log('[CONCIERGE] → invoking TraitExtractor agent');
         const traitResult = await context.agents.traitExtractor.extract({
             candidateId, 
-            resumeText
+            resumeText,
+            role
         });
 
         if (traitResult.error) {
             throw new Error(`Trait Extraction failed: ${traitResult.error}`);
         }
 
-        // 2. Score Candidate
-        context.log('Step 2: Scoring Candidate');
+        context.log('[CONCIERGE] TraitExtractor complete → invoking Scorer agent');
         const scoreResult = await context.agents.scorer.score({
             candidateId,
             role
@@ -38,7 +39,7 @@ export async function handle(event: Event, context: Context) {
             throw new Error(`Scoring failed: ${scoreResult.error}`);
         }
 
-        context.log('Pipeline completed successfully for candidate:', candidateId);
+        context.log('[CONCIERGE] Scorer complete → pipeline finished for', candidateId);
 
         return {
             success: true,

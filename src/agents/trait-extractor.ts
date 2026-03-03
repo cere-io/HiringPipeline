@@ -4,71 +4,111 @@ export async function handle(event: Event, context: Context) {
     return extract(event.payload, context);
 }
 
+function geminiEndpoint(): string {
+    return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+}
+
+function geminiHeaders(): Record<string, string> {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`,
+    };
+}
+
+/** Strip markdown fences and extract the first complete {...} block. */
+function extractJson(raw: string): any {
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON object found in LLM output');
+    return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+/** Map raw LLM output to exactly the CandidateTraits schema. */
+function projectSchema(raw: any, candidateId: string): CandidateTraits {
+    const ratingObj = (v: any) =>
+        v && typeof v === 'object' && 'rating' in v
+            ? { items: Array.isArray(v.items) ? v.items : [], rating: Number(v.rating) || 0 }
+            : { items: [], rating: typeof v === 'number' ? v : 0 };
+
+    return {
+        candidate_id: candidateId,
+        skills: Array.isArray(raw.skills) ? raw.skills : [],
+        years_of_experience: typeof raw.years_of_experience === 'number' ? raw.years_of_experience : 0,
+        company_stages: Array.isArray(raw.company_stages) ? raw.company_stages : [],
+        education_level: typeof raw.education_level === 'string' ? raw.education_level : 'Unknown',
+        schools: ratingObj(raw.schools),
+        hard_things_done: ratingObj(raw.hard_things_done),
+        hackathons: ratingObj(raw.hackathons),
+        open_source_contributions: ratingObj(raw.open_source_contributions),
+        company_signals: ratingObj(raw.company_signals),
+        conclusive_score: 0,
+        source_completeness: { has_resume: true, has_linkedin: false },
+        extracted_at: new Date().toISOString()
+    };
+}
+
 export async function extract(payload: any, context: Context) {
-    const { candidateId, resumeText } = payload;
+    const { candidateId, resumeText, role } = payload;
 
     if (!resumeText || !candidateId) {
         return { success: false, error: 'Missing resumeText or candidateId' };
     }
 
-    context.log('Extracting traits for candidate:', candidateId);
+    context.log('Extracting traits for candidate:', candidateId, 'for role:', role);
+    context.log('Calling Gemini 2.0 Flash for resume trait extraction...');
 
-    try {
-        // In reality, this would be an LLM call:
-        // const prompt = `Extract technical_depth, communication, problem_solving, system_design (0-10) and skills from this resume: ${resumeText}`;
-        // const result = await context.models.infer('gpt-4', { prompt });
-        
-        // Mocking a basic text heuristic parser to simulate extracting traits based on keywords
-        const textLower = resumeText.toLowerCase();
-        
-        let techDepth = 5;
-        let sysDesign = 3;
-        let probSolving = 6;
-        let comms = 7;
-        const skills: string[] = [];
+    const systemPrompt = `You are a senior technical recruiter extracting structured signals from a resume for the role: "${role || 'Software Engineer'}".
 
-        if (textLower.includes('architecture') || textLower.includes('scalable') || textLower.includes('microservices')) {
-            sysDesign += 5;
-            techDepth += 2;
-        }
+Return ONLY this exact JSON object. No markdown. No explanation. No extra fields.
+{
+  "skills": ["list of technical/soft skills"],
+  "years_of_experience": <integer>,
+  "company_stages": ["startup" | "series_a" | "series_b" | "growth" | "public" | "enterprise"],
+  "education_level": "Bachelors" | "Masters" | "PhD" | "None",
+  "schools": { "items": ["school names"], "rating": <0-10> },
+  "hard_things_done": { "items": ["impressive achievements"], "rating": <0-10> },
+  "hackathons": { "items": ["hackathon names"], "rating": <0-10> },
+  "open_source_contributions": { "items": ["OSS projects"], "rating": <0-10> },
+  "company_signals": { "items": ["notable employers"], "rating": <0-10> }
+}
 
-        if (textLower.includes('typescript') || textLower.includes('python') || textLower.includes('rust')) {
-            techDepth += 3;
-            if (textLower.includes('typescript')) skills.push('TypeScript');
-            if (textLower.includes('python')) skills.push('Python');
-            if (textLower.includes('rust')) skills.push('Rust');
-        }
+Rating scale: 0 = none/unknown, 5 = average, 10 = exceptional.`;
 
-        if (textLower.includes('led') || textLower.includes('team') || textLower.includes('presented')) {
-            comms += 2;
-            probSolving += 2;
-        }
+    const response = await context.fetch(geminiEndpoint(), {
+        method: 'POST',
+        headers: geminiHeaders(),
+        body: JSON.stringify({
+            model: 'gemini-2.5-flash',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Resume:\n${resumeText.slice(0, 4000)}` }
+            ],
+            temperature: 0.2
+        })
+    });
 
-        const traits: CandidateTraits = {
-            id: candidateId,
-            technical_depth: Math.min(10, techDepth),
-            communication: Math.min(10, comms),
-            problem_solving: Math.min(10, probSolving),
-            system_design: Math.min(10, sysDesign),
-            skills,
-            raw_evidence: {
-                "tech_depth_evidence": "Found programming languages mentioned in resume.",
-                "sys_design_evidence": textLower.includes('scalable') ? "Mentioned scalable systems." : "No explicit system design keywords found."
-            }
-        };
-
-        // Save to hiring-traits cubby
-        const traitsCubby = context.cubby('hiring-traits');
-        traitsCubby.json.set(`/${candidateId}`, traits);
-
-        context.log('Successfully extracted traits and saved to hiring-traits cubby');
-
-        return {
-            success: true,
-            traits
-        };
-    } catch (error: any) {
-        context.log('Error extracting traits:', error.message);
-        return { success: false, error: error.message };
+    if (!response.ok) {
+        throw new Error(`Gemini API error ${response.status}: ${JSON.stringify(response.data)}`);
     }
+
+    const rawContent = response.data.choices[0].message.content;
+    context.log('LLM Raw Output:', rawContent.slice(0, 400) + (rawContent.length > 400 ? '...' : ''));
+
+    const parsed = extractJson(rawContent);
+    const traits = projectSchema(parsed, candidateId);
+
+    context.log('Extracted traits:', JSON.stringify({
+        skills: traits.skills.slice(0, 3),
+        yoe: traits.years_of_experience,
+        schools: traits.schools.rating,
+        hard_things: traits.hard_things_done.rating,
+        company_signals: traits.company_signals.rating
+    }));
+
+    const traitsCubby = context.cubby('hiring-traits');
+    traitsCubby.json.set(`/${candidateId}`, traits);
+    context.log('Saved to hiring-traits cubby:', candidateId);
+
+    return { success: true, traits };
 }

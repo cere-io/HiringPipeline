@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || 'http://localhost:8080';
-const EVENT_RUNTIME_URL = process.env.EVENT_RUNTIME_URL || 'http://localhost:8084';
+const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || 'https://compute-1.devnet.ddc-dragon.com';
+const EVENT_RUNTIME_URL = process.env.EVENT_RUNTIME_URL || 'https://compute-1.devnet.ddc-dragon.com';
 
 async function deploy() {
     console.log(`🚀 Deploying Hiring Pipeline Agents to Cere DDC Node...`);
@@ -16,8 +16,10 @@ async function deploy() {
         
         // This is a simulated payload structure based on the DDC Topology API
         const servicePayload = {
-            pubKey: servicePubKey,
-            metadata: { name: "Hiring Pipeline" }
+            agentServicePubKey: servicePubKey,
+            name: "Hiring Pipeline",
+            description: "Compound Intelligence HR PoC",
+            bucketId: "test-bucket-hiring-pipeline-" + Date.now()
         };
         
         const isReal = process.argv.includes('--real');

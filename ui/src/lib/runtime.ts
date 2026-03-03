@@ -2,6 +2,7 @@ import { handle as conciergeHandle } from './agents/concierge';
 import { extract as traitExtract } from './agents/trait-extractor';
 import { score as scoreExecute } from './agents/scorer';
 import { distill as distillExecute } from './agents/distillation';
+import { analyze as analyzeTranscript } from './agents/transcript-analyzer';
 import type { Context, Event } from './agents/types';
 
 // Simple in-memory mock storage that persists across API calls in the same Node process
@@ -52,7 +53,24 @@ export function createContext() {
             logs.push(msg);
         },
         emit: (eventType: string, payload: object) => console.log('   [EMIT]', eventType, payload),
-        fetch: () => ({ ok: true, data: {} }),
+        fetch: async (url: string, options?: any) => {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeout);
+                let data = null;
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    data = await res.json();
+                } else {
+                    data = await res.text();
+                }
+                return { ok: res.ok, status: res.status, data };
+            } catch (err: any) {
+                return { ok: false, error: err.message };
+            }
+        },
         cubby: (name: string) => mockCubbies[name] as any,
         agents: {
             traitExtractor: {
@@ -72,6 +90,12 @@ export function createContext() {
                     const res = await distillExecute(payload, context);
                     return { value: res };
                 }
+            },
+            transcriptAnalyzer: {
+                analyze: async (payload: any) => {
+                    const res = await analyzeTranscript(payload, context);
+                    return { value: res };
+                }
             }
         }
     };
@@ -79,4 +103,4 @@ export function createContext() {
     return { context, logs };
 }
 
-export { conciergeHandle, distillExecute };
+export { conciergeHandle, distillExecute, analyzeTranscript };

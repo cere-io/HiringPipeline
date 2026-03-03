@@ -91,4 +91,16 @@ export interface NewApplicationPayload {
     candidateId: string;
     resumeText: string;
     role: string;
+    source?: string; // ATS source: 'join' | 'wellfound' | 'direct' | etc.
+}
+
+/** Aggregate sourcing intelligence — stored in hiring-meta/sourcing_stats */
+export interface SourcingStats {
+    [source: string]: {
+        total_candidates: number;
+        avg_ai_score: number;
+        avg_human_score: number;
+        avg_performance_score: number;
+        hired_count: number;
+    };
 }

@@ -9,7 +9,7 @@ export async function POST(req: Request) {
         const useRealNode = process.env.NEXT_PUBLIC_USE_REAL_DDC_NODE === 'true';
 
         if (useRealNode) {
-            const eventRuntimeUrl = process.env.EVENT_RUNTIME_URL || 'http://localhost:8084';
+            const eventRuntimeUrl = process.env.EVENT_RUNTIME_URL || 'https://compute-1.devnet.ddc-dragon.com';
             const event: Event = {
                 id: `evt-${Date.now()}`,
                 event_type: 'OUTCOME_RECORDED',
