@@ -3,9 +3,9 @@ import { mockCubbies } from '@/lib/runtime';
 
 export async function GET(
     request: Request,
-    { params }: { params: { candidateId: string } }
+    { params }: { params: Promise<{ candidateId: string }> }
 ) {
-    const candidateId = params.candidateId;
+    const candidateId = (await params).candidateId;
 
     if (!candidateId) {
         return NextResponse.json({ success: false, error: 'Missing candidateId' }, { status: 400 });
