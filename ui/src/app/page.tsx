@@ -203,7 +203,7 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
           <div className="flex items-center gap-4 text-xs font-medium text-slate-600 bg-slate-100 py-2 px-4 rounded-full border border-slate-200">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> UI Mocking Event Runtime</span>
             <span className="border-l border-slate-300 h-4 mx-1"></span>
-            <span>V8 Execution: Active</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400"></span> Agent Runtime: Mock (DDC-compatible)</span>
           </div>
         </div>
       </header>
@@ -499,7 +499,7 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                         <span className={`font-bold ${stats.avg_human_score >= 7 ? 'text-green-600' : stats.avg_human_score >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>{stats.avg_human_score}/10</span>
                       </td>
                       <td className="py-2 text-right">
-                        <span className={`font-bold ${stats.avg_performance_score >= 7 ? 'text-green-600' : stats.avg_performance_score >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>{stats.avg_performance_score > 0 ? `${stats.avg_performance_score}/10` : '—'}</span>
+                        <span className={`font-bold ${stats.avg_performance_score >= 7 ? 'text-green-600' : stats.avg_performance_score >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>{stats.performance_review_count > 0 ? `${stats.avg_performance_score}/10` : '—'}</span>
                       </td>
                       <td className="py-2 text-right text-slate-600">{stats.hired_count}</td>
                     </tr>

@@ -101,6 +101,7 @@ export interface SourcingStats {
         avg_ai_score: number;
         avg_human_score: number;
         avg_performance_score: number;
+        performance_review_count: number; // only candidates with 1-month reviews
         hired_count: number;
     };
 }
