@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { analyzeTranscript, createContext } from '@/lib/runtime';
+import { analyzeTranscript, createContext, logPipelineEvent } from '@/lib/runtime';
 import { Event } from '@/lib/agents/types';
 
 /**
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
         }
 
         console.log(`[Webhook] Received Interview Transcript for ${candidateId}`);
+        logPipelineEvent(`evt-${Date.now()}`, 'INTERVIEW_TRANSCRIPT', candidateId, { role }, 'hr-2026-e2e').catch(() => {});
 
         const useRealNode = process.env.NEXT_PUBLIC_USE_REAL_DDC_NODE === 'true';
 

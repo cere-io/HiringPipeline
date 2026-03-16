@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { mockCubbies } from '@/lib/runtime';
 
 export async function GET() {
-    const data = {
-        traits: mockCubbies['hiring-traits'].getAll(),
-        scores: mockCubbies['hiring-scores'].getAll(),
-        outcomes: mockCubbies['hiring-outcomes'].getAll(),
-        meta: mockCubbies['hiring-meta'].getAll(),
-    };
-    
-    return NextResponse.json(data);
+    const [traits, scores, outcomes, meta] = await Promise.all([
+        mockCubbies['hiring-traits'].getAll(),
+        mockCubbies['hiring-scores'].getAll(),
+        mockCubbies['hiring-outcomes'].getAll(),
+        mockCubbies['hiring-meta'].getAll(),
+    ]);
+
+    return NextResponse.json({ traits, scores, outcomes, meta });
 }

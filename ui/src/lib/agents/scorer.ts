@@ -33,11 +33,11 @@ export async function score(payload: any, context: Context) {
     context.log('Scoring candidate:', candidateId, 'for role:', role);
 
     const traitsCubby = context.cubby('hiring-traits');
-    const traits: CandidateTraits = traitsCubby.json.get(`/${candidateId}`);
+    const traits: CandidateTraits = await traitsCubby.json.get(`/${candidateId}`);
     if (!traits) throw new Error(`Traits not found for candidate ${candidateId}`);
 
     const metaCubby = context.cubby('hiring-meta');
-    let weights: TraitWeights = metaCubby.json.get(`/trait_weights/${role}`);
+    let weights: TraitWeights = await metaCubby.json.get(`/trait_weights/${role}`);
 
     if (!weights) {
         context.log(`No weights found for ${role}, initialising defaults`);
@@ -46,7 +46,7 @@ export async function score(payload: any, context: Context) {
             schools: 0.1, hard_things_done: 0.2, hackathons: 0.1,
             open_source_contributions: 0.1, company_signals: 0.1
         };
-        metaCubby.json.set(`/trait_weights/${role}`, weights);
+        await metaCubby.json.set(`/trait_weights/${role}`, weights);
     }
 
     const signals = {
@@ -101,7 +101,7 @@ Score this candidate 0-100 by applying the weights to each signal. Return ONLY t
     context.log(`LLM Score: ${compositeScore} — ${parsed.reasoning}`);
 
     traits.conclusive_score = parseFloat(compositeScore.toFixed(2));
-    traitsCubby.json.set(`/${candidateId}`, traits);
+    await traitsCubby.json.set(`/${candidateId}`, traits);
 
     const scoreRecord: CandidateScore = {
         id: candidateId,
@@ -111,7 +111,7 @@ Score this candidate 0-100 by applying the weights to each signal. Return ONLY t
     };
 
     const scoresCubby = context.cubby('hiring-scores');
-    scoresCubby.json.set(`/${candidateId}`, scoreRecord);
+    await scoresCubby.json.set(`/${candidateId}`, scoreRecord);
     context.log('Saved score to hiring-scores cubby:', scoreRecord.composite_score);
 
     return { success: true, score: scoreRecord };

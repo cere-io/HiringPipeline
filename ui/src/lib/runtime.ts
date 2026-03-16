@@ -3,6 +3,8 @@ import { extract as traitExtract } from './agents/trait-extractor';
 import { score as scoreExecute } from './agents/scorer';
 import { distill as distillExecute } from './agents/distillation';
 import { analyze as analyzeTranscript } from './agents/transcript-analyzer';
+import { PostgresCubby, logPipelineEvent } from './postgres-cubby';
+import { DualWriteCubby } from './dual-write-cubby';
 import type { Context, Event } from './agents/types';
 
 // Simple in-memory mock storage that persists across API calls in the same Node process
@@ -20,7 +22,6 @@ class MockCubby {
         incr: (path: string) => { this.jsonData[path] = (this.jsonData[path] || 0) + 1; return this.jsonData[path]; }
     };
 
-    // Vector operations omitted for brevity in this specific test
     vector = {
         createIndex: () => {}, add: () => {}, search: () => [], get: () => null, delete: () => {}, exists: () => false, count: () => 0
     };
@@ -30,22 +31,55 @@ class MockCubby {
     }
 }
 
+// Storage mode: 'mock' | 'postgres' | 'dual'
+// - mock: in-memory only (Phase 1, default if no SUPABASE_SERVICE_ROLE_KEY)
+// - postgres: Supabase Postgres only (Phase 2, production)
+// - dual: writes to both, reads from Postgres (Phase 2, verification)
+const STORAGE_MODE = (process.env.STORAGE_MODE || 'dual') as 'mock' | 'postgres' | 'dual';
+const hasSupabase = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+const effectiveMode = hasSupabase ? STORAGE_MODE : 'mock';
+
+if (!hasSupabase && STORAGE_MODE !== 'mock') {
+    console.warn(`[RUNTIME] STORAGE_MODE=${STORAGE_MODE} but no SUPABASE_SERVICE_ROLE_KEY set. Falling back to mock.`);
+}
+
+console.log(`[RUNTIME] Storage mode: ${effectiveMode}`);
+
+const CUBBY_NAMES = ['hiring-traits', 'hiring-scores', 'hiring-interviews', 'hiring-outcomes', 'hiring-meta'] as const;
+
+// Build cubby instances based on storage mode
+type CubbyMap = Record<string, MockCubby | PostgresCubby | DualWriteCubby>;
+
+function buildCubbies(): CubbyMap {
+    const cubbies: CubbyMap = {};
+
+    for (const name of CUBBY_NAMES) {
+        if (effectiveMode === 'mock') {
+            cubbies[name] = new MockCubby();
+        } else if (effectiveMode === 'postgres') {
+            cubbies[name] = new PostgresCubby(name);
+        } else {
+            // dual mode
+            cubbies[name] = new DualWriteCubby(name, new MockCubby(), new PostgresCubby(name), 'postgres');
+        }
+    }
+
+    return cubbies;
+}
+
 // Global instance to persist between Next.js API route calls (in development)
-const globalForCubbies = global as unknown as { mockCubbies: Record<string, MockCubby> };
+const globalForCubbies = global as unknown as { cubbies: CubbyMap };
 
-export const mockCubbies = globalForCubbies.mockCubbies || {
-    'hiring-traits': new MockCubby(),
-    'hiring-scores': new MockCubby(),
-    'hiring-interviews': new MockCubby(),
-    'hiring-outcomes': new MockCubby(),
-    'hiring-meta': new MockCubby(),
-};
+export const cubbies = globalForCubbies.cubbies || buildCubbies();
 
-if (process.env.NODE_ENV !== 'production') globalForCubbies.mockCubbies = mockCubbies;
+if (process.env.NODE_ENV !== 'production') globalForCubbies.cubbies = cubbies;
+
+// Backward compatibility: export as mockCubbies for existing API routes
+export const mockCubbies = cubbies as Record<string, any>;
 
 export function createContext() {
     const logs: string[] = [];
-    
+
     const context: Context = {
         log: (...args: any[]) => {
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
@@ -56,7 +90,7 @@ export function createContext() {
         fetch: async (url: string, options?: any) => {
             try {
                 const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+                const timeout = setTimeout(() => controller.abort(), 60000);
                 const res = await fetch(url, { ...options, signal: controller.signal });
                 clearTimeout(timeout);
                 let data = null;
@@ -71,7 +105,7 @@ export function createContext() {
                 return { ok: false, error: err.message };
             }
         },
-        cubby: (name: string) => mockCubbies[name] as any,
+        cubby: (name: string) => cubbies[name] as any,
         agents: {
             traitExtractor: {
                 extract: async (payload: any) => {
@@ -103,4 +137,4 @@ export function createContext() {
     return { context, logs };
 }
 
-export { conciergeHandle, distillExecute, analyzeTranscript };
+export { conciergeHandle, distillExecute, analyzeTranscript, logPipelineEvent };

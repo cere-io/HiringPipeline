@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { conciergeHandle, createContext } from '@/lib/runtime';
+import { conciergeHandle, createContext, logPipelineEvent } from '@/lib/runtime';
 import { Event } from '@/lib/agents/types';
 
 /**
@@ -18,6 +18,10 @@ export async function POST(req: Request) {
         const resumeText = body.candidate?.resume_text || body.resumeText || "Candidate applied via Join.com without parsable resume text.";
 
         console.log(`[Webhook] Received Join Application for ${candidateId} (Role: ${role})`);
+
+        // Log to pipeline_events audit trail
+        const eventId = `evt-${Date.now()}`;
+        logPipelineEvent(eventId, 'NEW_APPLICATION', candidateId, { role, source: 'join' }, 'join').catch(() => {});
 
         const event: Event = {
             id: `evt-${Date.now()}`,

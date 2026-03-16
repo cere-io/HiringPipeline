@@ -23,14 +23,14 @@ export interface Context {
 
 export interface CubbyClient {
     json: {
-        get(path: string): any;
-        set(path: string, value: any, opts?: any): void;
-        delete(path: string): void;
-        exists(path: string): boolean;
-        mget(paths: string[]): Record<string, any>;
-        mset(items: Record<string, any>, opts?: any): void;
-        keys(pattern?: string): string[];
-        incr(path: string, delta?: number): number;
+        get(path: string): any | Promise<any>;
+        set(path: string, value: any, opts?: any): void | Promise<void>;
+        delete(path: string): void | Promise<void>;
+        exists(path: string): boolean | Promise<boolean>;
+        mget(paths: string[]): Record<string, any> | Promise<Record<string, any>>;
+        mset(items: Record<string, any>, opts?: any): void | Promise<void>;
+        keys(pattern?: string): string[] | Promise<string[]>;
+        incr(path: string, delta?: number): number | Promise<number>;
     };
     vector: {
         createIndex(): void;

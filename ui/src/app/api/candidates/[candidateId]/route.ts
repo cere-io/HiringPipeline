@@ -12,10 +12,12 @@ export async function GET(
     }
 
     try {
-        const traits = mockCubbies['hiring-traits'].json.get(`/${candidateId}`);
-        const score = mockCubbies['hiring-scores'].json.get(`/${candidateId}`);
-        const interview = mockCubbies['hiring-interviews'].json.get(`/${candidateId}`);
-        const outcome = mockCubbies['hiring-outcomes'].json.get(`/${candidateId}`);
+        const [traits, score, interview, outcome] = await Promise.all([
+            mockCubbies['hiring-traits'].json.get(`/${candidateId}`),
+            mockCubbies['hiring-scores'].json.get(`/${candidateId}`),
+            mockCubbies['hiring-interviews'].json.get(`/${candidateId}`),
+            mockCubbies['hiring-outcomes'].json.get(`/${candidateId}`),
+        ]);
 
         if (!traits && !score && !interview) {
             return NextResponse.json({ 

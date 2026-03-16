@@ -57,16 +57,16 @@ function validateWeights(raw: any): TraitWeights {
 }
 
 /** Update aggregate sourcing stats in hiring-meta/sourcing_stats. */
-function updateSourcingStats(
+async function updateSourcingStats(
     metaCubby: any,
     source: string,
     aiScore: number,
     humanScore: number,
     performanceScore: number | null,
     isPerformanceReview: boolean
-): void {
+): Promise<void> {
     const key = '/sourcing_stats';
-    const stats: SourcingStats = metaCubby.json.get(key) ?? {};
+    const stats: SourcingStats = (await metaCubby.json.get(key)) ?? {};
     const entry = stats[source] ?? {
         total_candidates: 0, avg_ai_score: 0, avg_human_score: 0,
         avg_performance_score: 0, performance_review_count: 0, hired_count: 0
@@ -87,7 +87,7 @@ function updateSourcingStats(
     }
 
     stats[source] = entry;
-    metaCubby.json.set(key, stats);
+    await metaCubby.json.set(key, stats);
 }
 
 export async function distill(payload: any, context: Context) {
@@ -103,15 +103,15 @@ export async function distill(payload: any, context: Context) {
     const metaCubby     = context.cubby('hiring-meta');
     const outcomesCubby = context.cubby('hiring-outcomes');
 
-    outcomesCubby.json.set(`/${candidateId}`, { outcome, timestamp: new Date().toISOString() });
+    await outcomesCubby.json.set(`/${candidateId}`, { outcome, timestamp: new Date().toISOString() });
 
-    const traits: CandidateTraits = traitsCubby.json.get(`/${candidateId}`);
+    const traits: CandidateTraits = await traitsCubby.json.get(`/${candidateId}`);
     if (!traits) {
         return { success: false, error: 'Traits not found for candidate — run pipeline first' };
     }
 
     // Persist human feedback score back to the trait record (data-model requirement)
-    traitsCubby.json.set(`/${candidateId}`, { ...traits, human_feedback_score: outcome });
+    await traitsCubby.json.set(`/${candidateId}`, { ...traits, human_feedback_score: outcome });
 
     // Update aggregate sourcing intelligence
     const source = (payload.source as string) || 'direct';
@@ -119,10 +119,10 @@ export async function distill(payload: any, context: Context) {
     const isPerformanceReview = payload.isPerformanceReview === true;
     const humanScore = isPerformanceReview ? (traits.human_feedback_score ?? outcome) : outcome;
     const performanceScore = isPerformanceReview ? outcome : null;
-    updateSourcingStats(metaCubby, source, aiScore, humanScore, performanceScore, isPerformanceReview);
+    await updateSourcingStats(metaCubby, source, aiScore, humanScore, performanceScore, isPerformanceReview);
     context.log(`Sourcing stats updated for source: ${source} (${isPerformanceReview ? '1-month review' : 'human review'})`);
 
-    const currentWeights: TraitWeights = metaCubby.json.get(`/trait_weights/${role}`) ?? DEFAULT_WEIGHTS;
+    const currentWeights: TraitWeights = (await metaCubby.json.get(`/trait_weights/${role}`)) ?? DEFAULT_WEIGHTS;
 
     context.log('Calling Gemini 2.5 Flash for compound intelligence weight update...');
 
@@ -178,7 +178,7 @@ Candidate trait ratings:
     const validated = validateWeights(parsed);
     const newWeights = normalize(validated);
 
-    metaCubby.json.set(`/trait_weights/${role}`, newWeights);
+    await metaCubby.json.set(`/trait_weights/${role}`, newWeights);
     context.log('Weights updated (Gemini) for role:', role);
     context.log('New Weights:', JSON.stringify(newWeights));
 

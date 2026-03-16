@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { distillExecute, createContext } from '@/lib/runtime';
+import { distillExecute, createContext, logPipelineEvent } from '@/lib/runtime';
 import { Event } from '@/lib/agents/types';
 
 /**
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
         }
 
         console.log(`[Webhook] Received Notion Human Score for ${candidateId}: ${humanScore}`);
+        logPipelineEvent(`evt-${Date.now()}`, 'OUTCOME_RECORDED', candidateId, { role, humanScore }, 'notion').catch(() => {});
 
         const useRealNode = process.env.NEXT_PUBLIC_USE_REAL_DDC_NODE === 'true';
 

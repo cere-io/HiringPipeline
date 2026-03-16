@@ -79,7 +79,7 @@ Score honestly. 0 = none demonstrated, 5 = adequate, 10 = exceptional.`;
     context.log('Interview Analysis:', JSON.stringify(analysisResult));
 
     const interviewsCubby = context.cubby('hiring-interviews');
-    interviewsCubby.json.set(`/${candidateId}`, {
+    await interviewsCubby.json.set(`/${candidateId}`, {
         candidate_id: candidateId,
         role,
         interview_date: new Date().toISOString(),

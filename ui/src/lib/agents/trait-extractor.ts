@@ -107,7 +107,7 @@ Rating scale: 0 = none/unknown, 5 = average, 10 = exceptional.`;
     }));
 
     const traitsCubby = context.cubby('hiring-traits');
-    traitsCubby.json.set(`/${candidateId}`, traits);
+    await traitsCubby.json.set(`/${candidateId}`, traits);
     context.log('Saved to hiring-traits cubby:', candidateId);
 
     return { success: true, traits };
