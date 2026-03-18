@@ -17,6 +17,16 @@ export default function Home() {
   const [activeStep, setActiveStep] = useState(1);
   const [latestCandidate, setLatestCandidate] = useState<string | null>(null);
   const [isDistilling, setIsDistilling] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [humanScore, setHumanScore] = useState<number | null>(null);
+  const [humanFeedback, setHumanFeedback] = useState('');
+  const [distillScore, setDistillScore] = useState<number | null>(null);
+  const [distillFeedback, setDistillFeedback] = useState('');
+  const [interviewTranscript, setInterviewTranscript] = useState('');
+  const [isAnalyzingInterview, setIsAnalyzingInterview] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [previousWeights, setPreviousWeights] = useState<Record<string, number> | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
 
   const addLog = (type: 'network'|'agent'|'cubby'|'system', message: string) => {
     setTerminalLogs(prev => [...prev, { time: new Date().toISOString().split('T')[1].slice(0, -1), type, message }]);
@@ -87,19 +97,39 @@ export default function Home() {
     setResumeText('');
   };
 
-  const handleInterview = async (cid: string, cRole: string) => {
+  const handleInterviewWebhook = async (cid: string, cRole: string) => {
     const mockTranscript = `Interviewer: Tell me about a time you designed a scalable architecture.
 Candidate: At my last job, I designed a microservices architecture using Node.js and Redis that scaled to 10M DAU. We had to carefully manage our Cubby state...
 Interviewer: How do you handle disagreements on technical choices?
 Candidate: I try to be very clear in my communication and rely on data-driven ADRs to make decisions.`;
-
+    setIsAnalyzingInterview(true);
     addLog('system', `Email Poller Webhook simulated. Ingesting Interview Transcript for ${cid}`);
     addLog('network', `POST /api/webhooks/interview - Payload: { candidateId: "${cid}", transcriptLength: ${mockTranscript.length} }`);
-    
     const res = await fetch('/api/webhooks/interview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidateId: cid, role: cRole, transcriptText: mockTranscript })
+    });
+    const result = await res.json();
+    if (result.logs) result.logs.forEach((l: string) => addLog('agent', l));
+    if (result.analysis) addLog('cubby', `[WRITE] hiring-interviews/${cid} = ${JSON.stringify(result.analysis)}`);
+    await fetchData();
+    setIsAnalyzingInterview(false);
+    setActiveStep(5);
+  };
+
+  const handleInterview = async (cid: string, cRole: string) => {
+    const transcript = interviewTranscript.trim();
+    if (!transcript) return;
+
+    setIsAnalyzingInterview(true);
+    addLog('system', `Manual Interview Transcript submitted for analysis: ${cid}`);
+    addLog('network', `POST /api/webhooks/interview - Payload: { candidateId: "${cid}", transcriptLength: ${transcript.length} }`);
+    
+    const res = await fetch('/api/webhooks/interview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidateId: cid, role: cRole, transcriptText: transcript })
     });
     
     const result = await res.json();
@@ -113,17 +143,24 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
     }
 
     await fetchData();
-    setActiveStep(5); // Proceed to Distill step
+    setIsAnalyzingInterview(false);
+    setInterviewTranscript('');
+    setActiveStep(5);
   };
 
-  const handleOutcome = async (cid: string, cRole: string, outcome: number) => {
-    addLog('system', `Notion Webhook simulated. Human Score: ${outcome}/10 for ${cid}`);
-    addLog('network', `POST /api/distill - Payload: { candidateId: "${cid}", outcome: ${outcome} }`);
+  const handleOutcome = async (cid: string, cRole: string, outcome: number, feedback?: string) => {
+    setIsSubmittingReview(true);
+    addLog('system', `Human Review submitted. Score: ${outcome}/10 for ${cid}${feedback ? ` | Feedback: "${feedback.slice(0, 100)}"` : ''}`);
+    addLog('network', `POST /api/distill - Payload: { candidateId: "${cid}", outcome: ${outcome}, feedback: ${feedback ? `"${feedback.slice(0, 60)}..."` : 'null'} }`);
+
+    const weightsBeforeKey = `/trait_weights/${cRole}`;
+    const weightsBefore = data?.meta?.[weightsBeforeKey] ? { ...data.meta[weightsBeforeKey] } : null;
+    setPreviousWeights(weightsBefore);
     
     const res = await fetch('/api/distill', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidateId: cid, role: cRole, outcome, source: cid.split('-')[0] || 'direct', isPerformanceReview: false })
+      body: JSON.stringify({ candidateId: cid, role: cRole, outcome, feedback: feedback || undefined, source: cid.split('-')[0] || 'direct', isPerformanceReview: false })
     });
 
     const result = await res.json();
@@ -132,28 +169,34 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
       result.logs.forEach((l: string) => addLog('agent', l));
     }
     
-    // Every distillation call writes to 3 cubbies
-    addLog('cubby', `[WRITE] hiring-outcomes/${cid} = { outcome: ${outcome}, timestamp: "${new Date().toISOString()}" }`);
+    addLog('cubby', `[WRITE] hiring-outcomes/${cid} = { outcome: ${outcome}${feedback ? `, feedback: "${feedback.slice(0, 80)}"` : ''}, timestamp: "${new Date().toISOString()}" }`);
     addLog('cubby', `[WRITE] hiring-traits/${cid} → human_feedback_score: ${outcome}`);
+    if (feedback) {
+      addLog('agent', `Human reasoning fed to Gemini distillation: "${feedback.slice(0, 120)}"`);
+    }
     if (result.new_weights) {
       addLog('cubby', `[WRITE] hiring-meta/trait_weights/${cRole} = ${JSON.stringify(result.new_weights)}`);
-      addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}.`);
+      addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}${feedback ? ' (with human reasoning)' : ''}.`);
     }
 
     await fetchData();
-    setActiveStep(4); // Proceed to Interview step
+    setIsSubmittingReview(false);
+    setHumanScore(null);
+    setHumanFeedback('');
+    setInterviewTranscript('');
+    setActiveStep(4);
   };
 
-  const handleDistill = async (cid: string, cRole: string, performanceScore: number) => {
+  const handleDistill = async (cid: string, cRole: string, performanceScore: number, feedback?: string) => {
     if (isDistilling) return;
     setIsDistilling(true);
-    addLog('system', `⏩ 1 Month Later — Performance Review triggered for ${cid}`);
-    addLog('network', `POST /api/distill - Payload: { candidateId: "${cid}", outcome: ${performanceScore} }`);
+    addLog('system', `1 Month Later — Performance Review triggered for ${cid}${feedback ? ` | Manager feedback: "${feedback.slice(0, 100)}"` : ''}`);
+    addLog('network', `POST /api/distill - Payload: { candidateId: "${cid}", outcome: ${performanceScore}, feedback: ${feedback ? `"${feedback.slice(0, 60)}..."` : 'null'} }`);
     
     const res = await fetch('/api/distill', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidateId: cid, role: cRole, outcome: performanceScore, source: cid.split('-')[0] || 'direct', isPerformanceReview: true })
+      body: JSON.stringify({ candidateId: cid, role: cRole, outcome: performanceScore, feedback: feedback || undefined, source: cid.split('-')[0] || 'direct', isPerformanceReview: true })
     });
 
     const result = await res.json();
@@ -162,15 +205,20 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
       result.logs.forEach((l: string) => addLog('agent', l));
     }
 
-    addLog('cubby', `[WRITE] hiring-outcomes/${cid} = { outcome: ${performanceScore}, timestamp: "${new Date().toISOString()}" }`);
+    addLog('cubby', `[WRITE] hiring-outcomes/${cid} = { outcome: ${performanceScore}${feedback ? `, feedback: "${feedback.slice(0, 80)}"` : ''}, timestamp: "${new Date().toISOString()}" }`);
     addLog('cubby', `[WRITE] hiring-traits/${cid} → human_feedback_score: ${performanceScore}`);
+    if (feedback) {
+      addLog('agent', `Manager reasoning fed to Gemini distillation: "${feedback.slice(0, 120)}"`);
+    }
     if (result.new_weights) {
       addLog('cubby', `[WRITE] hiring-meta/trait_weights/${cRole} = ${JSON.stringify(result.new_weights)}`);
-      addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}.`);
+      addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}${feedback ? ' (with manager reasoning)' : ''}.`);
     }
 
     await fetchData();
     setIsDistilling(false);
+    setDistillScore(null);
+    setDistillFeedback('');
     setActiveStep(6 as any);
   };
   const renderTraits = (traits: any) => {
@@ -250,7 +298,30 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Raw Resume Text</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Resume</label>
+                    <div className="flex gap-2 mb-2">
+                      <label className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded border cursor-pointer transition-colors ${uploadingPdf ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-blue-600 border-blue-300 hover:bg-blue-50'}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                        {uploadingPdf ? 'Extracting...' : 'Upload PDF'}
+                        <input type="file" accept=".pdf" className="hidden" disabled={loading || uploadingPdf} onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploadingPdf(true);
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          try {
+                            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                            const json = await res.json();
+                            if (json.text) setResumeText(json.text);
+                          } catch (err) {
+                            console.error('PDF upload failed:', err);
+                          }
+                          setUploadingPdf(false);
+                          e.target.value = '';
+                        }} />
+                      </label>
+                      <span className="text-xs text-slate-400 self-center">or paste text below</span>
+                    </div>
                     <textarea required value={resumeText} onChange={e => setResumeText(e.target.value)} placeholder="Paste candidate's raw resume here..." rows={6} className="w-full p-3 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs resize-none" disabled={loading} />
                   </div>
                   <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded flex justify-center items-center gap-2 disabled:opacity-70">
@@ -275,10 +346,16 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                       <div className="text-xs text-blue-500 mt-0.5">/ 100</div>
                     </div>
                   </div>
+                  {data.scores[`/${latestCandidate}`].reasoning && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">AI Reasoning</div>
+                      <p className="text-sm text-slate-700 italic">{data.scores[`/${latestCandidate}`].reasoning}</p>
+                    </div>
+                  )}
                   <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Extracted Traits — hiring-traits Cubby</div>
                   {renderTraits(data.traits[`/${latestCandidate}`])}
                   <button onClick={() => setActiveStep(3.5 as any)} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded flex items-center justify-center gap-2">
-                    Proceed to Human Review →
+                    Proceed to Human Review
                   </button>
                 </div>
               )}
@@ -288,27 +365,33 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                 <div className="space-y-4 animate-fade-in">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900">Human Review</h3>
-                    <p className="text-sm text-slate-500">Hiring manager scores the candidate in Notion. This triggers the Distillation agent.</p>
+                    <p className="text-sm text-slate-500">Score this candidate 1-10 and explain your reasoning. This triggers the Distillation Agent.</p>
                   </div>
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-                    <div className="text-sm font-semibold text-indigo-900 mb-4">How does <strong>{latestCandidate}</strong> look to you?</div>
-                    <div className="flex gap-3">
-                      <button onClick={() => handleOutcome(latestCandidate, role, 9)} className="flex-1 bg-white border-2 border-green-200 hover:border-green-500 hover:bg-green-50 text-green-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1">
-                        <span className="text-2xl">⭐</span>
-                        <span>9/10</span>
-                        <span className="text-xs font-normal opacity-70">Exceptional</span>
-                      </button>
-                      <button onClick={() => handleOutcome(latestCandidate, role, 5)} className="flex-1 bg-white border-2 border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50 text-yellow-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1">
-                        <span className="text-2xl">🤔</span>
-                        <span>5/10</span>
-                        <span className="text-xs font-normal opacity-70">Average</span>
-                      </button>
-                      <button onClick={() => handleOutcome(latestCandidate, role, 2)} className="flex-1 bg-white border-2 border-red-200 hover:border-red-500 hover:bg-red-50 text-red-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1">
-                        <span className="text-2xl">❌</span>
-                        <span>2/10</span>
-                        <span className="text-xs font-normal opacity-70">Poor Fit</span>
-                      </button>
+                    <div className="text-sm font-semibold text-indigo-900 mb-3">How does <strong>{latestCandidate}</strong> look to you?</div>
+                    <div className="flex gap-1.5 mb-4">
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <button key={n} disabled={isSubmittingReview} onClick={() => setHumanScore(n)}
+                          className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${humanScore === n
+                            ? n >= 8 ? 'bg-green-600 text-white ring-2 ring-green-400' : n >= 5 ? 'bg-yellow-500 text-white ring-2 ring-yellow-300' : 'bg-red-500 text-white ring-2 ring-red-300'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400'
+                          } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        >{n}</button>
+                      ))}
                     </div>
+                    <textarea value={humanFeedback} onChange={e => setHumanFeedback(e.target.value)} disabled={isSubmittingReview}
+                      placeholder="Why do you agree or disagree with the AI score? Your reasoning helps the compound intelligence learn..."
+                      rows={3} className="w-full p-3 border border-indigo-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-400 resize-none mb-3 disabled:opacity-40" />
+                    {isSubmittingReview && (
+                      <div className="flex items-center gap-2 bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-2 mb-3">
+                        <svg className="animate-spin w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        <span className="text-xs font-semibold text-indigo-800">Distillation Agent running — updating role weights...</span>
+                      </div>
+                    )}
+                    <button disabled={!humanScore || isSubmittingReview} onClick={() => humanScore && handleOutcome(latestCandidate, role, humanScore, humanFeedback)}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                      Submit Review {humanScore ? `(${humanScore}/10)` : ''}
+                    </button>
                   </div>
                 </div>
               )}
@@ -318,20 +401,46 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                 <div className="space-y-4 animate-fade-in">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Interview Score</h3>
-                      <p className="text-sm text-slate-500">Email poller picks up interview transcript → Llama analyzes it.</p>
+                      <h3 className="text-xl font-bold text-slate-900">Interview Analysis</h3>
+                      <p className="text-sm text-slate-500">Ingest transcript from email webhook or paste manually.</p>
                     </div>
                     <div className="bg-indigo-50 border border-indigo-200 px-4 py-2 rounded-lg text-center text-sm">
                       <div className="text-xs text-slate-500">Human Review</div>
                       <div className="font-bold text-indigo-700">{data?.outcomes?.[`/${latestCandidate}`]?.outcome}/10</div>
                     </div>
                   </div>
+
+                  {isAnalyzingInterview && (
+                    <div className="flex items-center gap-2 bg-teal-100 border border-teal-200 rounded-lg px-3 py-2">
+                      <svg className="animate-spin w-4 h-4 text-teal-600 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      <span className="text-xs font-semibold text-teal-800">Gemini 2.5 Flash is analyzing the transcript...</span>
+                    </div>
+                  )}
+
                   <div className="bg-teal-50 border border-teal-100 rounded-xl p-4">
-                    <div className="text-sm font-semibold text-teal-900 mb-3">📧 Simulate HR-2026-E2E Email Scraper Webhook</div>
-                    <p className="text-xs text-slate-500 mb-4">Sends a mock interview transcript to the Interview Agent (Llama 3.2) for semantic analysis across 4 dimensions.</p>
-                    <button onClick={() => handleInterview(latestCandidate, role)} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+                    <div className="text-sm font-semibold text-teal-900 mb-2">Simulate HR-2026-E2E Email Scraper Webhook</div>
+                    <p className="text-xs text-slate-500 mb-3">Simulates the email poller picking up an interview transcript and sending it to Gemini for semantic analysis across 4 dimensions.</p>
+                    <button disabled={isAnalyzingInterview} onClick={() => handleInterviewWebhook(latestCandidate, role)}
+                      className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                      Ingest from Email Webhook
+                    </button>
+                  </div>
+
+                  <div className="relative flex items-center gap-3">
+                    <div className="flex-1 border-t border-slate-200"></div>
+                    <span className="text-xs text-slate-400 font-medium">or paste manually</span>
+                    <div className="flex-1 border-t border-slate-200"></div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <textarea value={interviewTranscript} onChange={e => setInterviewTranscript(e.target.value)} disabled={isAnalyzingInterview}
+                      placeholder="Paste interview transcript here..."
+                      rows={4} className="w-full p-3 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-teal-400 resize-none mb-3 disabled:opacity-40" />
+                    <button disabled={!interviewTranscript.trim() || isAnalyzingInterview} onClick={() => handleInterview(latestCandidate, role)}
+                      className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                      Ingest Interview Transcript
+                      Analyze Pasted Transcript
                     </button>
                   </div>
                 </div>
@@ -368,57 +477,100 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                       <div className="font-bold text-amber-900 text-sm">1 Month Later — How is the employee performing?</div>
                     </div>
                     <p className="text-xs text-amber-700 mb-4">This score is fed back into the Distillation Agent to reinforce or penalize the traits that predicted this outcome.</p>
+                    <div className="flex gap-1.5 mb-4">
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <button key={n} disabled={isDistilling} onClick={() => setDistillScore(n)}
+                          className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${distillScore === n
+                            ? n >= 8 ? 'bg-green-600 text-white ring-2 ring-green-400' : n >= 5 ? 'bg-yellow-500 text-white ring-2 ring-yellow-300' : 'bg-red-500 text-white ring-2 ring-red-300'
+                            : 'bg-white border border-amber-200 text-slate-600 hover:border-amber-400'
+                          } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        >{n}</button>
+                      ))}
+                    </div>
+                    <textarea value={distillFeedback} onChange={e => setDistillFeedback(e.target.value)} disabled={isDistilling}
+                      placeholder="How is this hire performing? What's working or not working?"
+                      rows={3} className="w-full p-3 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 resize-none mb-3 disabled:opacity-40" />
                     {isDistilling && (
                       <div className="flex items-center gap-2 bg-amber-100 border border-amber-300 rounded-lg px-3 py-2 mb-3">
                         <svg className="animate-spin w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
                         <span className="text-xs font-semibold text-amber-800">Distillation Agent running — Gemini is updating role weights...</span>
                       </div>
                     )}
-                    <div className="flex gap-3">
-                      <button disabled={isDistilling} onClick={() => handleDistill(latestCandidate, role, 9)} className="flex-1 bg-white border-2 border-green-200 hover:border-green-500 hover:bg-green-50 text-green-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-green-200 disabled:hover:bg-white">
-                        <span className="text-2xl">🚀</span>
-                        <span>9/10</span>
-                        <span className="text-xs font-normal opacity-70">Exceeding expectations</span>
-                      </button>
-                      <button disabled={isDistilling} onClick={() => handleDistill(latestCandidate, role, 5)} className="flex-1 bg-white border-2 border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50 text-yellow-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-yellow-200 disabled:hover:bg-white">
-                        <span className="text-2xl">🤝</span>
-                        <span>5/10</span>
-                        <span className="text-xs font-normal opacity-70">Meeting expectations</span>
-                      </button>
-                      <button disabled={isDistilling} onClick={() => handleDistill(latestCandidate, role, 2)} className="flex-1 bg-white border-2 border-red-200 hover:border-red-500 hover:bg-red-50 text-red-700 font-bold py-4 rounded-xl flex flex-col items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-red-200 disabled:hover:bg-white">
-                        <span className="text-2xl">⚠️</span>
-                        <span>2/10</span>
-                        <span className="text-xs font-normal opacity-70">Underperforming</span>
-                      </button>
-                    </div>
+                    <button disabled={!distillScore || isDistilling} onClick={() => distillScore && handleDistill(latestCandidate, role, distillScore, distillFeedback)}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                      Submit Performance Review {distillScore ? `(${distillScore}/10)` : ''}
+                    </button>
                   </div>
                 </div>
               )}
 
               {/* STEP 6: Compound Intelligence loop complete */}
-              {activeStep === (6 as any) && latestCandidate && (
+              {activeStep === (6 as any) && latestCandidate && (() => {
+                const traits = data?.traits?.[`/${latestCandidate}`];
+                const score = data?.scores?.[`/${latestCandidate}`];
+                const outcome = data?.outcomes?.[`/${latestCandidate}`];
+                const interview = data?.interviews?.[`/${latestCandidate}`];
+                const currentWeights = data?.meta?.[`/trait_weights/${role}`];
+                const weightShifts = previousWeights && currentWeights
+                  ? Object.entries(currentWeights).map(([k, v]: [string, any]) => ({
+                      trait: k.replace(/_/g, ' '),
+                      before: ((previousWeights[k] || 0) * 100).toFixed(1),
+                      after: (v * 100).toFixed(1),
+                      delta: ((v - (previousWeights[k] || 0)) * 100).toFixed(1),
+                    })).filter(w => Math.abs(parseFloat(w.delta)) >= 0.1).sort((a, b) => Math.abs(parseFloat(b.delta)) - Math.abs(parseFloat(a.delta)))
+                  : [];
+                return (
                 <div className="space-y-4 animate-fade-in">
                   <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 text-center">
-                    <div className="text-3xl mb-2">🧠</div>
                     <h3 className="text-xl font-bold text-slate-900">Compound Intelligence Updated</h3>
-                    <p className="text-sm text-slate-500 mt-1">The Distillation Agent has adjusted the role weights based on the 1-month performance outcome.</p>
+                    <p className="text-sm text-slate-500 mt-1">The Distillation Agent has adjusted the role weights for <strong>{role}</strong>.</p>
                   </div>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">What happened:</div>
-                    <ul className="space-y-1.5 text-sm text-slate-600">
-                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold shrink-0">1.</span> Resume → Trait Extractor extracted 9 signals via LLM</li>
-                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold shrink-0">2.</span> AI Scorer calculated composite score against role weights</li>
-                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold shrink-0">3.</span> Human Review score recorded in Notion → first distillation pass</li>
-                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold shrink-0">4.</span> Interview transcript analyzed by LLM → stored in hiring-interviews</li>
-                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold shrink-0">5.</span> 1-month performance review → Distillation Agent updated role weights in hiring-meta</li>
-                    </ul>
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Candidate Journey — {latestCandidate}</div>
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold shrink-0">1.</span>
+                        <span>Trait Extractor found <strong>{traits?.skills?.length || 0} skills</strong>, {traits?.years_of_experience || 0} YOE, {traits?.education_level || 'N/A'} education</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold shrink-0">2.</span>
+                        <span>AI scored <strong>{score?.composite_score?.toFixed(1) || '—'}/100</strong>{score?.reasoning ? ` — "${score.reasoning}"` : ''}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-500 font-bold shrink-0">3.</span>
+                        <span>Human review: <strong>{outcome?.outcome || '—'}/10</strong>{outcome?.feedback ? ` — "${outcome.feedback}"` : ''}</span>
+                      </div>
+                      {interview?.analysis && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-blue-500 font-bold shrink-0">4.</span>
+                          <span>Interview: tech {interview.analysis.technical_depth}/10, communication {interview.analysis.communication_clarity}/10, culture {interview.analysis.cultural_fit}/10, problem-solving {interview.analysis.problem_solving}/10</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-center text-slate-400">Check the <strong>Active Role Weights</strong> panel → the values have shifted to reflect this candidate's outcome.</div>
-                  <button onClick={() => { setActiveStep(1); setLatestCandidate(null); setCandidateId(''); setResumeText(''); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+                  {weightShifts.length > 0 && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                      <div className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-2">Weight Shifts — What the AI Learned</div>
+                      <div className="space-y-1.5">
+                        {weightShifts.map(w => (
+                          <div key={w.trait} className="flex items-center gap-2 text-sm">
+                            <span className="w-36 font-medium text-slate-700 capitalize truncate">{w.trait}</span>
+                            <span className="text-slate-400 text-xs w-14 text-right">{w.before}%</span>
+                            <span className="text-slate-400 text-xs">→</span>
+                            <span className="text-slate-700 text-xs w-14 font-semibold">{w.after}%</span>
+                            <span className={`text-xs font-bold ${parseFloat(w.delta) > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {parseFloat(w.delta) > 0 ? '+' : ''}{w.delta}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={() => { setActiveStep(1); setLatestCandidate(null); setCandidateId(''); setResumeText(''); setPreviousWeights(null); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
                     Process Another Candidate
                   </button>
                 </div>
-              )}
+              );})()}
 
             </div>
           </div>
@@ -506,6 +658,110 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Candidate History Panel */}
+        {data?.traits && Object.keys(data.traits).length > 0 && (
+          <div className="flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span className="font-bold text-slate-800 text-sm">Processed Candidates</span>
+              <span className="text-xs text-slate-400 ml-1">Click to view full history</span>
+            </div>
+            <div className="p-4">
+              <div className="flex flex-wrap gap-2 mb-3">
+                {Object.keys(data.traits).map((key: string) => {
+                  const cid = key.replace(/^\//, '');
+                  const t = data.traits[key];
+                  const s = data.scores?.[key];
+                  const isSelected = selectedCandidate === cid;
+                  return (
+                    <button key={cid} onClick={() => setSelectedCandidate(isSelected ? null : cid)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                      <span className="font-semibold">{cid}</span>
+                      {s && <span className={`text-xs px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-500' : s.composite_score >= 70 ? 'bg-green-100 text-green-700' : s.composite_score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.composite_score?.toFixed(0)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedCandidate && (() => {
+                const t = data.traits?.[`/${selectedCandidate}`];
+                const s = data.scores?.[`/${selectedCandidate}`];
+                const o = data.outcomes?.[`/${selectedCandidate}`];
+                const iv = data.interviews?.[`/${selectedCandidate}`];
+                if (!t) return null;
+
+                const timelineEvents = [];
+                if (t?.extracted_at) timelineEvents.push({ time: t.extracted_at, label: 'Application Processed', detail: `Trait Extractor found ${t.skills?.length || 0} skills, ${t.years_of_experience} YOE, ${t.education_level} education`, color: 'blue' });
+                if (s?.timestamp) timelineEvents.push({ time: s.timestamp, label: `AI Score: ${s.composite_score?.toFixed(1)}/100`, detail: s.reasoning || 'No reasoning recorded', color: 'blue' });
+                if (o?.timestamp && !o?.isPerformanceReview) timelineEvents.push({ time: o.timestamp, label: `Human Review: ${o.outcome}/10`, detail: o.feedback || 'No written feedback', color: 'indigo' });
+                if (iv?.interview_date) timelineEvents.push({ time: iv.interview_date, label: 'Interview Analyzed', detail: iv.analysis?.summary || `Tech: ${iv.analysis?.technical_depth}/10, Comm: ${iv.analysis?.communication_clarity}/10, Culture: ${iv.analysis?.cultural_fit}/10, Problem-solving: ${iv.analysis?.problem_solving}/10`, color: 'teal' });
+
+                timelineEvents.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+                return (
+                  <div className="border border-slate-200 rounded-lg p-4 animate-fade-in">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-lg">{selectedCandidate}</h3>
+                        <p className="text-xs text-slate-500">{t.education_level} | {t.years_of_experience} YOE | {t.skills?.length || 0} skills</p>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        {s && <div className="text-center"><div className="text-[10px] text-slate-400 uppercase">AI</div><div className={`text-lg font-black ${s.composite_score >= 70 ? 'text-green-600' : s.composite_score >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>{s.composite_score?.toFixed(0)}</div></div>}
+                        {o && <div className="text-center"><div className="text-[10px] text-slate-400 uppercase">Human</div><div className={`text-lg font-black ${o.outcome >= 7 ? 'text-green-600' : o.outcome >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>{o.outcome}/10</div></div>}
+                      </div>
+                    </div>
+
+                    {t.skills && t.skills.length > 0 && (
+                      <div className="mb-4">
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 font-semibold">Skills</div>
+                        <div className="flex flex-wrap gap-1">{t.skills.slice(0, 12).map((sk: string) => <span key={sk} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] rounded-full">{sk}</span>)}{t.skills.length > 12 && <span className="px-2 py-0.5 text-slate-400 text-[11px]">+{t.skills.length - 12} more</span>}</div>
+                      </div>
+                    )}
+
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-2 font-semibold">Timeline</div>
+                    <div className="space-y-3">
+                      {timelineEvents.map((evt, i) => (
+                        <div key={i} className="flex gap-3 items-start">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-2.5 h-2.5 rounded-full bg-${evt.color}-500 shrink-0 mt-1`}></div>
+                            {i < timelineEvents.length - 1 && <div className="w-px h-full bg-slate-200 min-h-[20px]"></div>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-sm font-semibold text-slate-800">{evt.label}</span>
+                              <span className="text-[10px] text-slate-400">{new Date(evt.time).toLocaleString()}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">{evt.detail}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {timelineEvents.length === 0 && <p className="text-xs text-slate-400 italic">No events recorded yet.</p>}
+                    </div>
+
+                    {iv?.analysis && (
+                      <div className="mt-4 grid grid-cols-4 gap-2">
+                        {['technical_depth','communication_clarity','cultural_fit','problem_solving'].map(k => (
+                          <div key={k} className="bg-teal-50 p-2 rounded border border-teal-100 text-center">
+                            <div className="text-[10px] text-slate-500 uppercase leading-tight">{k.replace(/_/g,' ')}</div>
+                            <div className="font-bold text-teal-700">{iv.analysis[k]}/10</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {o?.feedback && (
+                      <div className="mt-3 bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                        <div className="text-[10px] text-indigo-500 uppercase tracking-wider font-semibold mb-1">Human Feedback</div>
+                        <p className="text-sm text-slate-700 italic">"{o.feedback}"</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -83,6 +83,7 @@ export interface CandidateTraits {
 export interface CandidateScore {
     id: string;
     composite_score: number;
+    reasoning?: string;
     weights_used: TraitWeights;
     timestamp: string;
 }

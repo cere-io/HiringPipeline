@@ -4,7 +4,7 @@ import { Event } from '@/lib/agents/types';
 
 export async function POST(req: Request) {
     try {
-        const { candidateId, role, outcome, source, isPerformanceReview } = await req.json();
+        const { candidateId, role, outcome, source, isPerformanceReview, feedback } = await req.json();
         
         const useRealNode = process.env.NEXT_PUBLIC_USE_REAL_DDC_NODE === 'true';
 
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ ...data, logs: ['[LIVE NODE] Outcome event forwarded to real DDC Node Event Runtime'] });
         } else {
             const { context, logs } = createContext();
-            const result = await distillExecute({ candidateId, role, outcome, source, isPerformanceReview }, context);
+            const result = await distillExecute({ candidateId, role, outcome, source, isPerformanceReview, feedback }, context);
             return NextResponse.json({ ...result, logs });
         }
     } catch (e: any) {
