@@ -106,6 +106,7 @@ Score this candidate 0-100 by applying the weights to each signal. Return ONLY t
     const scoreRecord: CandidateScore = {
         id: candidateId,
         composite_score: traits.conclusive_score,
+        reasoning: parsed.reasoning || '',
         weights_used: weights,
         timestamp: new Date().toISOString()
     };

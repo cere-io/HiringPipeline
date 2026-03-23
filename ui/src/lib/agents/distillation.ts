@@ -103,7 +103,8 @@ export async function distill(payload: any, context: Context) {
     const metaCubby     = context.cubby('hiring-meta');
     const outcomesCubby = context.cubby('hiring-outcomes');
 
-    await outcomesCubby.json.set(`/${candidateId}`, { outcome, timestamp: new Date().toISOString() });
+    const feedback = payload.feedback as string | undefined;
+    await outcomesCubby.json.set(`/${candidateId}`, { outcome, feedback: feedback || null, timestamp: new Date().toISOString() });
 
     const traits: CandidateTraits = await traitsCubby.json.get(`/${candidateId}`);
     if (!traits) {
@@ -114,7 +115,8 @@ export async function distill(payload: any, context: Context) {
     await traitsCubby.json.set(`/${candidateId}`, { ...traits, human_feedback_score: outcome });
 
     // Update aggregate sourcing intelligence
-    const source = (payload.source as string) || 'direct';
+    const rawSource = payload.source as string | undefined;
+    const source = rawSource || (candidateId.includes('-') ? candidateId.split('-')[0] : candidateId);
     const aiScore = traits.conclusive_score ?? 0;
     const isPerformanceReview = payload.isPerformanceReview === true;
     const humanScore = isPerformanceReview ? (traits.human_feedback_score ?? outcome) : outcome;
@@ -141,7 +143,7 @@ RULES:
 Baseline weights for reference:
 ${JSON.stringify(DEFAULT_WEIGHTS)}`;
 
-    const userPrompt = `Outcome score: ${outcome}/10
+    const userPrompt = `Outcome score: ${outcome}/10${feedback ? `\nHuman reasoning: "${feedback}"` : ''}
 Current weights: ${JSON.stringify(currentWeights)}
 Candidate trait ratings:
 - hard_things_done: ${traits.hard_things_done.rating}/10
