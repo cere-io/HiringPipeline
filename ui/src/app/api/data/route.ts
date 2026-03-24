@@ -352,7 +352,7 @@ function computeDualRadar(traits: Record<string, any>, interviews: Record<string
 }
 
 export async function GET() {
-    const [traits, scores, outcomes, interviews, meta, signals, rawStatuses] = await Promise.all([
+    const [cubbyTraits, cubbyScores, cubbyOutcomes, cubbyInterviews, meta, signals, cubbyStatuses] = await Promise.all([
         mockCubbies['hiring-traits'].getAll(),
         mockCubbies['hiring-scores'].getAll(),
         mockCubbies['hiring-outcomes'].getAll(),
@@ -362,23 +362,60 @@ export async function GET() {
         mockCubbies['hiring-status'].getAll(),
     ]);
 
-    // On Vercel (serverless), in-memory statuses may be empty. Reconstruct from pipeline_events.
-    let statuses = rawStatuses;
-    if (!statuses || Object.keys(statuses).length === 0) {
-        try {
-            const { data: events } = await supabase
-                .from('pipeline_events')
-                .select('candidate_id, event_type, payload, created_at')
-                .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE'])
-                .order('created_at', { ascending: true });
+    // Use cubby data if available (local dev), otherwise fall back to Supabase
+    let traits = cubbyTraits;
+    let scores = cubbyScores;
+    let outcomes = cubbyOutcomes;
+    let interviews = cubbyInterviews;
+    let statuses = cubbyStatuses;
 
-            if (events && events.length > 0) {
-                const rebuilt: Record<string, any> = {};
-                for (const evt of events) {
+    const cubbyEmpty = !traits || Object.keys(traits).length === 0;
+
+    if (cubbyEmpty) {
+        try {
+            const [dbTraits, dbScores, dbOutcomes, dbInterviews, dbEvents] = await Promise.all([
+                supabase.from('candidate_traits').select('*'),
+                supabase.from('candidate_scores').select('*'),
+                supabase.from('candidate_outcomes').select('*'),
+                supabase.from('interview_analyses').select('*'),
+                supabase.from('pipeline_events').select('candidate_id, event_type, payload, created_at')
+                    .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE'])
+                    .order('created_at', { ascending: true }),
+            ]);
+
+            if (dbTraits.data && dbTraits.data.length > 0) {
+                traits = {};
+                for (const row of dbTraits.data) {
+                    traits[`/${row.candidate_id}`] = row;
+                }
+            }
+            if (dbScores.data && dbScores.data.length > 0) {
+                scores = {};
+                for (const row of dbScores.data) {
+                    scores[`/${row.candidate_id}`] = { id: row.candidate_id, composite_score: row.composite_score, reasoning: row.reasoning, weights_used: row.weights_used, timestamp: row.scored_at };
+                }
+            }
+            if (dbOutcomes.data && dbOutcomes.data.length > 0) {
+                outcomes = {};
+                for (const row of dbOutcomes.data) {
+                    outcomes[`/${row.candidate_id}`] = row;
+                }
+            }
+            if (dbInterviews.data && dbInterviews.data.length > 0) {
+                interviews = {};
+                for (const row of dbInterviews.data) {
+                    interviews[`/${row.candidate_id}`] = row;
+                }
+            }
+
+            // Reconstruct statuses from pipeline_events
+            if (dbEvents.data && dbEvents.data.length > 0) {
+                statuses = {};
+                for (const evt of dbEvents.data) {
                     if (!evt.candidate_id) continue;
                     const key = `/${evt.candidate_id}`;
                     if (evt.event_type === 'NEW_APPLICATION') {
-                        rebuilt[key] = {
+                        statuses[key] = {
                             candidate_id: evt.candidate_id,
                             role: evt.payload?.role || '',
                             stage: 'ai_scored',
@@ -386,18 +423,19 @@ export async function GET() {
                             updated_at: evt.created_at,
                         };
                     }
-                    if (evt.event_type === 'STAGE_CHANGE' && rebuilt[key]) {
-                        rebuilt[key].stage = evt.payload?.newStage || rebuilt[key].stage;
-                        rebuilt[key].updated_at = evt.created_at;
+                    if (evt.event_type === 'STAGE_CHANGE' && statuses[key]) {
+                        statuses[key].stage = evt.payload?.newStage || statuses[key].stage;
+                        statuses[key].updated_at = evt.created_at;
                         if (evt.payload?.newStage === 'rejected') {
-                            rebuilt[key].rejected_at_stage = evt.payload?.previousStage;
-                            rebuilt[key].rejection_reasons = evt.payload?.reasons;
+                            statuses[key].rejected_at_stage = evt.payload?.previousStage;
+                            statuses[key].rejection_reasons = evt.payload?.reasons;
                         }
                     }
                 }
-                statuses = rebuilt;
             }
-        } catch {}
+        } catch (e: any) {
+            console.error('[data] Supabase fallback error:', e.message);
+        }
     }
 
     const signalCorrelations: Record<string, { avg_ai_score: number; avg_human_score: number; candidate_count: number }> = {};

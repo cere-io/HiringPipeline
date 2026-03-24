@@ -81,7 +81,33 @@ Scoring guidance:
             timestamp: new Date().toISOString(),
         };
 
-        // Write to cubbies for local dev (non-critical — may fail on serverless)
+        // Persist to Supabase (survives serverless cold starts + page reloads)
+        try {
+            await Promise.all([
+                supabase.from('candidate_traits').upsert({
+                    candidate_id: candidateId, ...traits,
+                    skills: traits.skills, company_stages: traits.company_stages,
+                    schools: traits.schools, hard_things_done: traits.hard_things_done,
+                    hackathons: traits.hackathons, open_source_contributions: traits.open_source_contributions,
+                    company_signals: traits.company_signals, source_completeness: traits.source_completeness,
+                }, { onConflict: 'candidate_id' }),
+                supabase.from('candidate_scores').upsert({
+                    candidate_id: candidateId,
+                    composite_score: score.composite_score,
+                    reasoning: score.reasoning,
+                    weights_used: score.weights_used,
+                    scored_at: score.timestamp,
+                }, { onConflict: 'candidate_id' }),
+                supabase.from('pipeline_events').insert([
+                    { id: `evt-app-${Date.now()}`, event_type: 'NEW_APPLICATION', candidate_id: candidateId, payload: { role, source: 'ui' }, source: 'ui' },
+                    { id: `evt-score-${Date.now() + 1}`, event_type: 'STAGE_CHANGE', candidate_id: candidateId, payload: { previousStage: 'applied', newStage: 'ai_scored', role, score: score.composite_score }, source: 'ui' },
+                ]),
+            ]);
+        } catch (e: any) {
+            console.error('[score] Supabase write error:', e.message);
+        }
+
+        // Write to cubbies for local dev (non-critical)
         try {
             const { mockCubbies } = await import('@/lib/runtime');
             await mockCubbies['hiring-traits']?.json?.set(`/${candidateId}`, traits);
@@ -90,26 +116,6 @@ Scoring guidance:
                 candidate_id: candidateId, role, stage: 'ai_scored',
                 created_at: score.timestamp, updated_at: score.timestamp,
             });
-        } catch {}
-
-        // Persist to pipeline_events (works on both local and Vercel)
-        try {
-            await supabase.from('pipeline_events').insert([
-                {
-                    id: `evt-app-${Date.now()}`,
-                    event_type: 'NEW_APPLICATION',
-                    candidate_id: candidateId,
-                    payload: { role, source: 'ui' },
-                    source: 'ui',
-                },
-                {
-                    id: `evt-score-${Date.now() + 1}`,
-                    event_type: 'STAGE_CHANGE',
-                    candidate_id: candidateId,
-                    payload: { previousStage: 'applied', newStage: 'ai_scored', role, score: score.composite_score },
-                    source: 'ui',
-                },
-            ]);
         } catch {}
 
         return NextResponse.json({
