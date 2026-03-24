@@ -1213,34 +1213,32 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
 
               return (
                 <div className="space-y-6">
-                  {/* Radar Controls */}
+                  {/* Radar Controls — 3-way view toggle */}
                   <div className="flex flex-wrap items-center gap-3 bg-slate-50 rounded-lg p-3">
                     <div className="flex gap-1">
-                      <button onClick={() => { setRadarMode('aggregate'); setRadarCandidate(null); }}
-                        className={`px-2.5 py-1 text-[11px] font-semibold rounded ${radarMode === 'aggregate' ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                      <button onClick={() => { setRadarMode('aggregate'); setRadarCandidate(null); setRadarCompare('winners'); }}
+                        className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg ${radarMode === 'aggregate' ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
                         Winners vs Rejects
                       </button>
-                      <button onClick={() => { setRadarMode('candidate'); if (!radarCandidate && candidateIds.length > 0) setRadarCandidate(candidateIds[0]); }}
-                        className={`px-2.5 py-1 text-[11px] font-semibold rounded ${radarMode === 'candidate' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
-                        Compare Candidate
+                      <button onClick={() => { setRadarMode('candidate'); setRadarCompare('none'); if (!radarCandidate && candidateIds.length > 0) setRadarCandidate(candidateIds[0]); }}
+                        className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg ${radarMode === 'candidate' && radarCompare === 'none' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                        Current Only
+                      </button>
+                      <button onClick={() => { setRadarMode('candidate'); setRadarCompare('winners'); if (!radarCandidate && candidateIds.length > 0) setRadarCandidate(candidateIds[0]); }}
+                        className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg ${radarMode === 'candidate' && radarCompare === 'winners' ? 'bg-green-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                        vs Winners
+                      </button>
+                      <button onClick={() => { setRadarMode('candidate'); setRadarCompare('rejects'); if (!radarCandidate && candidateIds.length > 0) setRadarCandidate(candidateIds[0]); }}
+                        className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg ${radarMode === 'candidate' && radarCompare === 'rejects' ? 'bg-red-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                        vs Rejects
                       </button>
                     </div>
                     {radarMode === 'candidate' && (
-                      <>
-                        <select value={radarCandidate || ''} onChange={e => setRadarCandidate(e.target.value)}
-                          className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
-                          <option value="" disabled>Select candidate</option>
-                          {candidateIds.map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
-                        </select>
-                        <span className="text-[10px] text-slate-400">vs</span>
-                        <select value={radarCompare} onChange={e => setRadarCompare(e.target.value)}
-                          className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
-                          <option value="none">Current Only</option>
-                          <option value="winners">vs Winners (avg)</option>
-                          <option value="rejects">vs Rejects (avg)</option>
-                          {candidateIds.filter(c => c !== radarCandidate).map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
-                        </select>
-                      </>
+                      <select value={radarCandidate || ''} onChange={e => setRadarCandidate(e.target.value)}
+                        className="text-xs border border-slate-300 rounded px-2 py-1.5 bg-white outline-none focus:ring-1 focus:ring-blue-400">
+                        <option value="" disabled>Select candidate</option>
+                        {candidateIds.map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
+                      </select>
                     )}
                   </div>
 

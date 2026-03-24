@@ -1,4 +1,4 @@
-import { Event, Context, TraitWeights, CandidateTraits, SourcingStats } from './types';
+import { Event, Context, TraitWeights, CandidateTraits, SourcingStats, TraitSignal } from './types';
 
 export async function handle(event: Event, context: Context) {
     return distill(event.payload, context);
@@ -184,5 +184,70 @@ Candidate trait ratings:
     context.log('Weights updated (Gemini) for role:', role);
     context.log('New Weights:', JSON.stringify(newWeights));
 
+    // Index trait-level reasons as signals
+    const reasons = payload.reasons as string[] | undefined;
+    if (reasons && reasons.length > 0) {
+        const signalsCubby = context.cubby('hiring-signals');
+        const catalog: Record<string, TraitSignal> = (await signalsCubby.json.get('/catalog')) ?? {};
+        const direction = outcome >= 7 ? 'positive' : outcome <= 4 ? 'negative' : 'positive';
+        const now = new Date().toISOString();
+
+        for (const reason of reasons) {
+            const sigId = reason.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
+            const bestCategory = findBestCategory(reason, traits);
+
+            if (catalog[sigId]) {
+                catalog[sigId].occurrence_count += 1;
+                catalog[sigId].strength = Math.min(1, catalog[sigId].strength + 0.1);
+                if (!catalog[sigId].candidate_ids.includes(candidateId)) {
+                    catalog[sigId].candidate_ids.push(candidateId);
+                }
+                catalog[sigId].outcome_entries.push({ candidate_id: candidateId, outcome, timestamp: now });
+                catalog[sigId].avg_outcome = catalog[sigId].outcome_entries.reduce((s, e) => s + e.outcome, 0) / catalog[sigId].outcome_entries.length;
+                catalog[sigId].last_seen = now;
+            } else {
+                catalog[sigId] = {
+                    id: sigId,
+                    signal: reason,
+                    category: bestCategory,
+                    direction,
+                    strength: 0.5,
+                    occurrence_count: 1,
+                    candidate_ids: [candidateId],
+                    avg_outcome: outcome,
+                    outcome_entries: [{ candidate_id: candidateId, outcome, timestamp: now }],
+                    first_seen: now,
+                    last_seen: now,
+                };
+            }
+        }
+
+        await signalsCubby.json.set('/catalog', catalog);
+        // Also store each signal at its own key for the data route
+        for (const [id, sig] of Object.entries(catalog)) {
+            await signalsCubby.json.set(`/${id}`, sig);
+        }
+        context.log(`Indexed ${reasons.length} trait signals from human review`);
+    }
+
     return { success: true, new_weights: newWeights };
+}
+
+function findBestCategory(reason: string, traits: CandidateTraits): keyof TraitWeights {
+    const lower = reason.toLowerCase();
+    const keywords: Record<keyof TraitWeights, string[]> = {
+        skills: ['skill', 'technical', 'tech', 'coding', 'programming', 'language', 'framework', 'stack'],
+        years_of_experience: ['experience', 'years', 'senior', 'junior', 'tenure'],
+        company_stages: ['startup', 'enterprise', 'company', 'stage', 'growth', 'scale'],
+        education_level: ['education', 'degree', 'university', 'school', 'academic', 'phd', 'masters'],
+        schools: ['school', 'university', 'college', 'stanford', 'mit', 'iit'],
+        hard_things_done: ['hard', 'achievement', 'built', 'shipped', 'impact', 'project', 'product', 'difficult'],
+        hackathons: ['hackathon', 'competition', 'contest'],
+        open_source_contributions: ['open source', 'oss', 'github', 'contribution', 'community'],
+        company_signals: ['company', 'employer', 'google', 'faang', 'brand', 'network', 'signal'],
+    };
+    for (const [cat, words] of Object.entries(keywords)) {
+        if (words.some(w => lower.includes(w))) return cat as keyof TraitWeights;
+    }
+    return 'hard_things_done';
 }
