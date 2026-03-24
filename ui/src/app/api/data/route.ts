@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { mockCubbies } from '@/lib/runtime';
 import { supabase } from '@/lib/supabase';
 
 interface DimValueStats {
@@ -352,22 +351,34 @@ function computeDualRadar(traits: Record<string, any>, interviews: Record<string
 }
 
 export async function GET() {
-    const [cubbyTraits, cubbyScores, cubbyOutcomes, cubbyInterviews, meta, signals, cubbyStatuses] = await Promise.all([
-        mockCubbies['hiring-traits'].getAll(),
-        mockCubbies['hiring-scores'].getAll(),
-        mockCubbies['hiring-outcomes'].getAll(),
-        mockCubbies['hiring-interviews'].getAll(),
-        mockCubbies['hiring-meta'].getAll(),
-        mockCubbies['hiring-signals'].getAll(),
-        mockCubbies['hiring-status'].getAll(),
-    ]);
+    // Try cubbies first (works locally), fall back to Supabase (works on Vercel)
+    let traits: Record<string, any> = {};
+    let scores: Record<string, any> = {};
+    let outcomes: Record<string, any> = {};
+    let interviews: Record<string, any> = {};
+    let meta: Record<string, any> = {};
+    let signals: Record<string, any> = {};
+    let statuses: Record<string, any> = {};
 
-    // Use cubby data if available (local dev), otherwise fall back to Supabase
-    let traits = cubbyTraits;
-    let scores = cubbyScores;
-    let outcomes = cubbyOutcomes;
-    let interviews = cubbyInterviews;
-    let statuses = cubbyStatuses;
+    try {
+        const { mockCubbies } = await import('@/lib/runtime');
+        const [ct, cs, co, ci, cm, csi, cst] = await Promise.all([
+            mockCubbies['hiring-traits']?.getAll(),
+            mockCubbies['hiring-scores']?.getAll(),
+            mockCubbies['hiring-outcomes']?.getAll(),
+            mockCubbies['hiring-interviews']?.getAll(),
+            mockCubbies['hiring-meta']?.getAll(),
+            mockCubbies['hiring-signals']?.getAll(),
+            mockCubbies['hiring-status']?.getAll(),
+        ]);
+        traits = ct || {};
+        scores = cs || {};
+        outcomes = co || {};
+        interviews = ci || {};
+        meta = cm || {};
+        signals = csi || {};
+        statuses = cst || {};
+    } catch {}
 
     const cubbyEmpty = !traits || Object.keys(traits).length === 0;
 
