@@ -1,41 +1,56 @@
 import { NextResponse } from 'next/server';
-import { conciergeHandle, createContext, logPipelineEvent } from '@/lib/runtime';
-import { Event } from '@/lib/agents/types';
+import { conciergeHandle, createContext, logPipelineEvent, mockCubbies } from '@/lib/runtime';
+import { Event, CandidateStatus } from '@/lib/agents/types';
 
 /**
- * Expected Webhook Payload from Join.com (or forwarded by HR-2026-E2E)
- * The structure might vary, but we attempt to extract the key components.
+ * Receives candidate applications forwarded from:
+ *   - The Join cron poller (/api/cron/join-poll)
+ *   - Zapier/Make automation triggers
+ *   - Direct API calls from HR-2026-E2E or the UI
+ *
+ * Normalizes across all payload shapes before feeding the pipeline.
  */
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        
-        // Try to parse the standard Join.com webhook or fallback to flat structure
-        const candidateId = body.candidate?.id || body.candidateId || `join-${Date.now()}`;
-        const role = body.job?.title || body.role || 'engineer'; // Default to engineer if we can't parse it
-        
-        // The resume text might be deep in the payload or already extracted by the HR-2026-E2E layer
-        const resumeText = body.candidate?.resume_text || body.resumeText || "Candidate applied via Join.com without parsable resume text.";
 
-        console.log(`[Webhook] Received Join Application for ${candidateId} (Role: ${role})`);
+        // Normalize across: Join cron poller, Zapier/Make forwarded, flat UI payloads
+        const candidateId =
+            body.candidateId ||                          // cron poller / flat
+            (body.candidate?.id ? `join-${body.candidate.id}` : null) ||  // raw Join shape
+            `join-${Date.now()}`;
 
-        // Log to pipeline_events audit trail
+        const role =
+            body.role ||              // cron poller / flat
+            body.job?.title ||        // raw Join shape
+            'engineer';
+
+        const resumeText =
+            body.resumeText ||                  // cron poller / flat (already extracted)
+            body.candidate?.resume_text ||      // Zapier enriched
+            'Candidate applied via Join.com without parsable resume text.';
+
+        const source = body.source || 'join-webhook';
+        const candidateName =
+            body.candidateName ||
+            (body.candidate ? `${body.candidate.firstName || ''} ${body.candidate.lastName || ''}`.trim() : null);
+        const candidateEmail = body.candidateEmail || body.candidate?.email;
+        const linkedinUrl = body.linkedinUrl || body.candidate?.professionalLinks?.find((l: any) => l.type === 'LINKEDIN')?.url;
+
+        console.log(`[Webhook] Received Join Application for ${candidateId} (Role: ${role}, Source: ${source})`);
+
         const eventId = `evt-${Date.now()}`;
-        logPipelineEvent(eventId, 'NEW_APPLICATION', candidateId, { role, source: 'join' }, 'join').catch(() => {});
+        logPipelineEvent(eventId, 'NEW_APPLICATION', candidateId, { role, source }, source).catch(() => {});
 
         const event: Event = {
-            id: `evt-${Date.now()}`,
+            id: eventId,
             event_type: 'NEW_APPLICATION',
             app_id: process.env.NEXT_PUBLIC_DDC_APP_ID || 'ui-app',
             account_id: 'join-integration',
             timestamp: new Date().toISOString(),
             signature: 'sig',
             context_path: { agent_service: 'hiring', workspace: 'ws-1' },
-            payload: {
-                candidateId,
-                role,
-                resumeText
-            }
+            payload: { candidateId, role, resumeText },
         };
 
         const useRealNode = process.env.NEXT_PUBLIC_USE_REAL_DDC_NODE === 'true';
@@ -45,15 +60,40 @@ export async function POST(req: Request) {
             const res = await fetch(`${eventRuntimeUrl}/api/v1/events`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(event)
+                body: JSON.stringify(event),
             });
             const data = await res.json();
             return NextResponse.json({ ...data, logs: ['[LIVE NODE] Join event forwarded to real DDC Node Event Runtime'] });
         } else {
-            // Local Mock Execution
             const { context, logs } = createContext();
             const result = await conciergeHandle(event, context);
-            return NextResponse.json({ success: true, result, logs, source: 'Join Webhook' });
+
+            const now = new Date().toISOString();
+            const status: CandidateStatus = {
+                candidate_id: candidateId,
+                role,
+                stage: 'ai_scored',
+                created_at: now,
+                updated_at: now,
+            };
+            await mockCubbies['hiring-status'].json.set(`/${candidateId}`, status);
+
+            // Store candidate metadata for UI display
+            if (candidateName || candidateEmail || linkedinUrl) {
+                const existingTraits = await mockCubbies['hiring-traits'].json.get(`/${candidateId}`);
+                if (existingTraits) {
+                    await mockCubbies['hiring-traits'].json.set(`/${candidateId}`, {
+                        ...existingTraits,
+                        ...(candidateName && { candidate_name: candidateName }),
+                        ...(candidateEmail && { candidate_email: candidateEmail }),
+                        ...(linkedinUrl && { linkedin_url: linkedinUrl }),
+                        role,
+                        source: source.replace('-webhook', '').replace('-test', ''),
+                    });
+                }
+            }
+
+            return NextResponse.json({ success: true, result, logs, source });
         }
     } catch (e: any) {
         return NextResponse.json({ success: false, error: e.message }, { status: 500 });
