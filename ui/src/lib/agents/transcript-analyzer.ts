@@ -42,10 +42,19 @@ Return ONLY this exact JSON object. No markdown. No explanation.
   "cultural_fit": <0-10>,
   "problem_solving": <0-10>,
   "summary": "<2-3 sentence assessment of the candidate's performance>",
+  "startup_fit": {
+    "action_speed": <0-10>,
+    "autonomy": <0-10>,
+    "judgment": <0-10>,
+    "communication": <0-10>,
+    "coachability": <0-10>,
+    "drive_grit": <0-10>
+  },
   "red_flags": ["<any concerns, or empty array>"]
 }
 
-Score honestly. 0 = none demonstrated, 5 = adequate, 10 = exceptional.`;
+Score honestly. 0 = none demonstrated, 5 = adequate, 10 = exceptional.
+startup_fit axes: action_speed = bias toward action & shipping fast, autonomy = self-directed work, judgment = decision quality under ambiguity, communication = clarity & persuasion, coachability = openness to feedback, drive_grit = persistence & hunger.`;
 
     const response = await context.fetch(geminiEndpoint(), {
         method: 'POST',
