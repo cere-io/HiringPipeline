@@ -47,6 +47,7 @@ export default function Home() {
   const [candidateRoleFilter, setCandidateRoleFilter] = useState<string>('all');
   const [isSyncingJoin, setIsSyncingJoin] = useState(false);
   const [syncResult, setSyncResult] = useState<{ processed: number; message?: string } | null>(null);
+  const [lastJoinCandidate, setLastJoinCandidate] = useState<{ name: string; role: string; time: string } | null>(null);
 
   const addLog = (type: 'network'|'agent'|'cubby'|'system', message: string) => {
     setTerminalLogs(prev => [...prev, { time: new Date().toISOString().split('T')[1].slice(0, -1), type, message }]);
@@ -71,9 +72,18 @@ export default function Home() {
     }
   };
 
+  const fetchLastJoin = async () => {
+    try {
+      const res = await fetch('/api/join/latest');
+      const json = await res.json();
+      if (json.latest) setLastJoinCandidate(json.latest);
+    } catch {}
+  };
+
   useEffect(() => {
     fetchData();
     fetchRoles();
+    fetchLastJoin();
     addLog('system', 'UI Initialized. Connecting to mock DDC Event Runtime...');
     addLog('network', 'GET /api/data - Fetching initial Cubby states');
   }, []);
@@ -521,6 +531,7 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                     ? `Synced ${json.processed} new candidate(s) from Join`
                     : json.message || 'No new candidates on Join');
                   if (json.processed > 0) fetchData();
+                  fetchLastJoin();
                 } catch (e: any) {
                   addLog('system', `Join sync failed: ${e.message}`);
                   setSyncResult({ processed: 0, message: 'Sync failed' });
@@ -540,6 +551,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
               <span className={`text-xs font-medium ${syncResult.processed > 0 ? 'text-green-600' : 'text-slate-500'}`}>
                 {syncResult.processed > 0 ? `${syncResult.processed} new candidate${syncResult.processed > 1 ? 's' : ''} added` : syncResult.message || 'No new candidates'}
               </span>
+            )}
+            {lastJoinCandidate && (
+              <div className="text-right">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Latest on Join</div>
+                <div className="text-xs font-semibold text-slate-700">{lastJoinCandidate.name}</div>
+                <div className="text-[10px] text-slate-400">{lastJoinCandidate.role} &middot; {new Date(lastJoinCandidate.time).toLocaleString()}</div>
+              </div>
             )}
           </div>
         </div>
@@ -662,6 +680,15 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
             </div>
 
             <div className="p-6 relative overflow-y-auto">
+
+              {/* Back button — visible when viewing a candidate */}
+              {latestCandidate && activeStep !== 1 && activeStep !== 2 && (
+                <button onClick={() => { setLatestCandidate(null); setActiveStep(1); setGateDecision(null); setRejectionReasons([]); }}
+                  className="mb-4 flex items-center gap-1.5 text-sm text-slate-500 hover:text-blue-600 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  Back to New Candidate
+                </button>
+              )}
 
               {/* STEP 1: Apply — form input */}
               {(activeStep === 1 || activeStep === 2) && (
