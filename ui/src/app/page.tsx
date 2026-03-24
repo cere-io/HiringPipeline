@@ -1143,11 +1143,11 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                 const getName = (cid: string) => data?.traits?.[`/${cid}`]?.candidate_name || cid;
 
                 if (radarMode === 'aggregate') {
-                  const hasWR = aggregateAxes.some((a: any) => a.winner_score > 0 || a.reject_score > 0);
-                  if (hasWR) {
-                    layers.push({ label: 'Winners', color: '#22c55e', fill: 'rgba(34,197,94,0.12)', scores: aggregateAxes.map((a: any) => a.winner_score || 0) });
-                    layers.push({ label: 'Rejects', color: '#ef4444', fill: 'rgba(239,68,68,0.12)', scores: aggregateAxes.map((a: any) => a.reject_score || 0) });
-                  } else {
+                  const hasWinners = aggregateAxes.some((a: any) => a.winner_score > 0);
+                  const hasRejects = aggregateAxes.some((a: any) => a.reject_score > 0);
+                  if (hasWinners) layers.push({ label: 'Winners', color: '#22c55e', fill: 'rgba(34,197,94,0.12)', scores: aggregateAxes.map((a: any) => a.winner_score || 0) });
+                  if (hasRejects) layers.push({ label: 'Rejects', color: '#ef4444', fill: 'rgba(239,68,68,0.12)', scores: aggregateAxes.map((a: any) => a.reject_score || 0) });
+                  if (!hasWinners && !hasRejects) {
                     layers.push({ label: 'All', color: '#6366f1', fill: 'rgba(99,102,241,0.12)', scores: aggregateAxes.map((a: any) => a.all_score || 0) });
                   }
                 } else if (radarCandidate) {
@@ -1167,7 +1167,8 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
 
               const renderRadarChart = (axes: any[], keys: string[], labels: Record<string, string>, title: string, subtitle: string, source: 'profile_dna' | 'startup_fit') => {
                 const layers = buildLayers(keys, source, axes);
-                if (layers.every(l => l.scores.every(s => s === 0))) return null;
+                const hasAnyData = layers.some(l => l.scores.some(s => s > 0)) || axes.some((a: any) => a.all_score > 0);
+                if (!hasAnyData) return null;
                 const cx = 140, cy = 140, maxR = 110, n = keys.length;
                 return (
                   <div className="flex-1 min-w-[280px]">
@@ -1246,17 +1247,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                   {/* Dual Radar Charts */}
                   <div className="flex flex-wrap gap-6">
                     {renderRadarChart(dualRadar.profile_dna, PROFILE_KEYS, PROFILE_LABELS, 'Profile DNA', 'Education, companies, career, technical depth, shipped work, public presence', 'profile_dna')}
-                    {hasStartupData
-                      ? renderRadarChart(dualRadar.startup_fit, STARTUP_KEYS, STARTUP_LABELS, 'Startup Fit', 'Action bias, autonomy, judgment, communication, coachability, drive', 'startup_fit')
-                      : (
-                        <div className="flex-1 min-w-[280px] border border-dashed border-slate-200 rounded-xl p-6 text-center">
-                          <div className="text-sm font-bold text-slate-600 mb-1">Startup Fit</div>
-                          <div className="text-xs text-slate-400 mb-3">Action bias, autonomy, judgment, communication, coachability, drive</div>
-                          <div className="text-slate-300 mb-3"><svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
-                          <p className="text-xs text-slate-400 italic">Submit an interview transcript for a candidate to populate the Startup Fit chart.</p>
-                        </div>
-                      )
-                    }
+                    {renderRadarChart(dualRadar.startup_fit, STARTUP_KEYS, STARTUP_LABELS, 'Startup Fit', 'Action bias, autonomy, judgment, communication, coachability, drive', 'startup_fit') || (
+                      <div className="flex-1 min-w-[280px] border border-dashed border-slate-200 rounded-xl p-6 text-center">
+                        <div className="text-sm font-bold text-slate-600 mb-1">Startup Fit</div>
+                        <div className="text-xs text-slate-400 mb-3">Action bias, autonomy, judgment, communication, coachability, drive</div>
+                        <p className="text-xs text-slate-400 italic">Submit an interview transcript to populate this chart.</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Top Differentiating Traits */}
