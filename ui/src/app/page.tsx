@@ -85,37 +85,55 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setActiveStep(2); // Move to processing step
+    setActiveStep(2);
     
-    addLog('system', `Webhook received from ATS. Simulating NEW_APPLICATION event for ${candidateId}`);
-    addLog('network', `POST /api/pipeline - Payload: { candidateId: "${candidateId}", role: "${role}" }`);
+    addLog('system', `Webhook received from ATS. Processing ${candidateId}...`);
 
-    const res = await fetch('/api/pipeline', {
+    // Step 1: Extract traits (separate call to stay under Vercel 10s timeout)
+    addLog('network', `POST /api/pipeline/extract — Extracting traits for ${candidateId}`);
+    const extractRes = await fetch('/api/pipeline/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidateId, role, resumeText, source: candidateId.split('-')[0] || 'direct' })
+      body: JSON.stringify({ candidateId, role, resumeText })
     });
-    
-    const result = await res.json();
-    
-    if (result.logs) {
-      result.logs.forEach((l: string) => addLog('agent', l));
+    const extractResult = await extractRes.json();
+
+    if (extractResult.logs) {
+      extractResult.logs.forEach((l: string) => addLog('agent', l));
     }
 
-    if (!result.success && !result.traits) {
-      addLog('system', `Pipeline failed: ${result.error || 'Unknown error'}. Candidate stays in queue for retry.`);
+    if (!extractResult.success) {
+      addLog('system', `Trait extraction failed: ${extractResult.error || 'Unknown error'}`);
       setLoading(false);
       setActiveStep(1);
       await fetchData();
       return;
     }
-    
-    if (result.traits) {
-      addLog('cubby', `[WRITE] hiring-traits/${candidateId} = ${JSON.stringify(result.traits)}`);
+
+    addLog('cubby', `[WRITE] hiring-traits/${candidateId} = ${JSON.stringify(extractResult.traits)}`);
+
+    // Step 2: Score candidate (separate call, passes traits to avoid cubby miss)
+    addLog('network', `POST /api/pipeline/score — Scoring ${candidateId}`);
+    const scoreRes = await fetch('/api/pipeline/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidateId, role, traits: extractResult.traits })
+    });
+    const scoreResult = await scoreRes.json();
+
+    if (scoreResult.logs) {
+      scoreResult.logs.forEach((l: string) => addLog('agent', l));
     }
-    if (result.score) {
-      addLog('cubby', `[WRITE] hiring-scores/${candidateId} = ${JSON.stringify(result.score)}`);
+
+    if (!scoreResult.success) {
+      addLog('system', `Scoring failed: ${scoreResult.error || 'Unknown error'}`);
+      setLoading(false);
+      setActiveStep(1);
+      await fetchData();
+      return;
     }
+
+    addLog('cubby', `[WRITE] hiring-scores/${candidateId} = ${JSON.stringify(scoreResult.score)}`);
 
     await fetchData();
     setLatestCandidate(candidateId);
