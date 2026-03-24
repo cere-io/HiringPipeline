@@ -167,10 +167,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
     });
     const result = await res.json();
     if (result.logs) result.logs.forEach((l: string) => addLog('agent', l));
-    if (result.analysis) addLog('cubby', `[WRITE] hiring-interviews/${cid} = ${JSON.stringify(result.analysis)}`);
-    await fetchData();
+    if (result.analysis) {
+      addLog('cubby', `[WRITE] hiring-interviews/${cid} = ${JSON.stringify(result.analysis)}`);
+      setData((prev: any) => ({ ...prev, interviews: { ...(prev?.interviews || {}), [`/${cid}`]: result.analysis } }));
+    }
     setIsAnalyzingInterview(false);
     setActiveStep(4);
+    fetchData().catch(() => {});
   };
 
   const handleInterview = async (cid: string, cRole: string) => {
@@ -195,12 +198,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
     
     if (result.analysis) {
       addLog('cubby', `[WRITE] hiring-interviews/${cid} = ${JSON.stringify(result.analysis)}`);
+      setData((prev: any) => ({ ...prev, interviews: { ...(prev?.interviews || {}), [`/${cid}`]: result.analysis } }));
     }
 
-    await fetchData();
     setIsAnalyzingInterview(false);
     setInterviewTranscript('');
     setActiveStep(4);
+    fetchData().catch(() => {});
   };
 
   const handleOutcome = async (cid: string, cRole: string, outcome: number, feedback?: string, reasons?: string[]) => {
@@ -234,7 +238,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
       addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}${feedback ? ' (with human reasoning)' : ''}.`);
     }
 
-    await fetchData();
+    // Update local state with outcome so next steps render
+    setData((prev: any) => ({
+      ...prev,
+      outcomes: { ...(prev?.outcomes || {}), [`/${cid}`]: { outcome, feedback, reasons, timestamp: new Date().toISOString() } },
+      ...(result.new_weights ? { meta: { ...(prev?.meta || {}), [`/trait_weights/${cRole}`]: result.new_weights } } : {}),
+    }));
+
     setIsSubmittingReview(false);
     setHumanScore(null);
     setHumanFeedback('');
@@ -244,6 +254,8 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
     setGateDecision(null);
     setRejectionReasons([]);
     setActiveStep(3.75 as any);
+
+    fetchData().catch(() => {});
   };
 
   const handleDistill = async (cid: string, cRole: string, performanceScore: number, feedback?: string, reasons?: string[]) => {
@@ -274,13 +286,18 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
       addLog('system', `Compound Intelligence cycle complete. Weights updated for ${cRole}${feedback ? ' (with manager reasoning)' : ''}.`);
     }
 
-    await fetchData();
+    setData((prev: any) => ({
+      ...prev,
+      outcomes: { ...(prev?.outcomes || {}), [`/${cid}`]: { outcome: performanceScore, feedback, reasons, is_performance_review: true, timestamp: new Date().toISOString() } },
+      ...(result.new_weights ? { meta: { ...(prev?.meta || {}), [`/trait_weights/${cRole}`]: result.new_weights } } : {}),
+    }));
     setIsDistilling(false);
     setDistillScore(null);
     setDistillFeedback('');
     setDistillReasons([]);
     setCurrentDistillReason('');
     setActiveStep(6 as any);
+    fetchData().catch(() => {});
   };
 
   const handleInterviewReview = async (cid: string, cRole: string) => {
@@ -296,13 +313,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
     const result = await res.json();
     if (result.logs) result.logs.forEach((l: string) => addLog('agent', l));
     
-    await fetchData();
     setIsSubmittingInterviewReview(false);
     setInterviewHumanScore(null);
     setInterviewReasons([]);
     setCurrentInterviewReason('');
     setGateDecision(null);
     setRejectionReasons([]);
+    fetchData().catch(() => {});
     setActiveStep(4.5 as any);
   };
 
