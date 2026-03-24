@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { mockCubbies, logPipelineEvent } from '@/lib/runtime';
-import type { CandidateStatus } from '@/lib/agents/types';
+import { supabase } from '@/lib/supabase';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
@@ -29,9 +28,6 @@ export async function POST(req: Request) {
         if (!apiKey) {
             return NextResponse.json({ success: false, error: 'GEMINI_API_KEY not set' }, { status: 500 });
         }
-
-        // Write traits to cubbies (persists in-memory for local dev, shared across routes)
-        await mockCubbies['hiring-traits'].json.set(`/${candidateId}`, traits);
 
         const signals = {
             skills_count: traits.skills?.length || 0,
@@ -85,27 +81,36 @@ Scoring guidance:
             timestamp: new Date().toISOString(),
         };
 
-        // Write score + status to cubbies (local dev persistence)
-        await mockCubbies['hiring-scores'].json.set(`/${candidateId}`, score);
+        // Write to cubbies for local dev (non-critical — may fail on serverless)
+        try {
+            const { mockCubbies } = await import('@/lib/runtime');
+            await mockCubbies['hiring-traits']?.json?.set(`/${candidateId}`, traits);
+            await mockCubbies['hiring-scores']?.json?.set(`/${candidateId}`, score);
+            await mockCubbies['hiring-status']?.json?.set(`/${candidateId}`, {
+                candidate_id: candidateId, role, stage: 'ai_scored',
+                created_at: score.timestamp, updated_at: score.timestamp,
+            });
+        } catch {}
 
-        const now = new Date().toISOString();
-        const status: CandidateStatus = {
-            candidate_id: candidateId,
-            role,
-            stage: 'ai_scored',
-            created_at: now,
-            updated_at: now,
-        };
-        await mockCubbies['hiring-status'].json.set(`/${candidateId}`, status);
-
-        // Persist to pipeline_events (Vercel serverless durability)
-        logPipelineEvent(`evt-app-${Date.now()}`, 'NEW_APPLICATION', candidateId, {
-            role, source: 'ui',
-        }, 'ui').catch(() => {});
-
-        logPipelineEvent(`evt-score-${Date.now()}`, 'STAGE_CHANGE', candidateId, {
-            previousStage: 'applied', newStage: 'ai_scored', role, score: score.composite_score,
-        }, 'ui').catch(() => {});
+        // Persist to pipeline_events (works on both local and Vercel)
+        try {
+            await supabase.from('pipeline_events').insert([
+                {
+                    id: `evt-app-${Date.now()}`,
+                    event_type: 'NEW_APPLICATION',
+                    candidate_id: candidateId,
+                    payload: { role, source: 'ui' },
+                    source: 'ui',
+                },
+                {
+                    id: `evt-score-${Date.now() + 1}`,
+                    event_type: 'STAGE_CHANGE',
+                    candidate_id: candidateId,
+                    payload: { previousStage: 'applied', newStage: 'ai_scored', role, score: score.composite_score },
+                    source: 'ui',
+                },
+            ]);
+        } catch {}
 
         return NextResponse.json({
             success: true,
