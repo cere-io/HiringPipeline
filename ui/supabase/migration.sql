@@ -85,7 +85,21 @@ CREATE TABLE IF NOT EXISTS sourcing_stats (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. pipeline_events (audit trail - not in Cubbies but useful for debugging)
+-- 7. candidate_statuses (mirrors hiring-status cubby)
+CREATE TABLE IF NOT EXISTS candidate_statuses (
+    candidate_id TEXT PRIMARY KEY,
+    role TEXT,
+    stage TEXT DEFAULT 'applied',
+    rejected_at_stage TEXT,
+    rejection_reasons JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE OR REPLACE TRIGGER trg_candidate_statuses_updated
+    BEFORE UPDATE ON candidate_statuses FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- 8. pipeline_events (audit trail - not in Cubbies but useful for debugging)
 CREATE TABLE IF NOT EXISTS pipeline_events (
     id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,

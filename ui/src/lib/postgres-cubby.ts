@@ -17,6 +17,7 @@ const CUBBY_TABLE_MAP: Record<string, string> = {
   'hiring-scores': 'candidate_scores',
   'hiring-interviews': 'interview_analyses',
   'hiring-outcomes': 'candidate_outcomes',
+  'hiring-status': 'candidate_statuses',
   'hiring-meta': '__meta__', // Special: splits into role_weights + sourcing_stats
 };
 
