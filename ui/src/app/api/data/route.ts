@@ -384,7 +384,7 @@ export async function GET() {
 
     if (cubbyEmpty) {
         try {
-            const [dbTraits, dbScores, dbOutcomes, dbInterviews, dbEvents] = await Promise.all([
+            const [dbTraits, dbScores, dbOutcomes, dbInterviews, dbEvents, dbWeights] = await Promise.all([
                 supabase.from('candidate_traits').select('*'),
                 supabase.from('candidate_scores').select('*'),
                 supabase.from('candidate_outcomes').select('*'),
@@ -392,6 +392,7 @@ export async function GET() {
                 supabase.from('pipeline_events').select('candidate_id, event_type, payload, created_at')
                     .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE'])
                     .order('created_at', { ascending: true }),
+                supabase.from('role_weights').select('*'),
             ]);
 
             if (dbTraits.data && dbTraits.data.length > 0) {
@@ -442,6 +443,15 @@ export async function GET() {
                             statuses[key].rejection_reasons = evt.payload?.reasons;
                         }
                     }
+                }
+            }
+
+            // Load role weights into meta
+            if (dbWeights.data && dbWeights.data.length > 0) {
+                meta = meta || {};
+                for (const row of dbWeights.data) {
+                    const { role: roleName, updated_at, ...weights } = row;
+                    meta[`/trait_weights/${roleName}`] = weights;
                 }
             }
         } catch (e: any) {

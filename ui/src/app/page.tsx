@@ -1149,13 +1149,13 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                     layers.push({ label: 'All', color: '#6366f1', fill: 'rgba(99,102,241,0.12)', scores: aggregateAxes.map((a: any) => a.all_score || 0) });
                   }
                 } else if (radarCandidate) {
-                  layers.push({ label: radarCandidate, color: '#3b82f6', fill: 'rgba(59,130,246,0.15)', scores: getCandidateScores(radarCandidate, keys, source) });
+                  layers.push({ label: data?.traits?.[`/${radarCandidate}`]?.candidate_name || radarCandidate, color: '#3b82f6', fill: 'rgba(59,130,246,0.15)', scores: getCandidateScores(radarCandidate, keys, source) });
                   if (radarCompare === 'winners') {
                     layers.push({ label: 'Winners avg', color: '#22c55e', fill: 'rgba(34,197,94,0.08)', scores: aggregateAxes.map((a: any) => a.winner_score || 0) });
                   } else if (radarCompare === 'rejects') {
                     layers.push({ label: 'Rejects avg', color: '#ef4444', fill: 'rgba(239,68,68,0.08)', scores: aggregateAxes.map((a: any) => a.reject_score || 0) });
                   } else if (radarCompare && radarCompare !== radarCandidate) {
-                    layers.push({ label: radarCompare, color: '#f59e0b', fill: 'rgba(245,158,11,0.12)', scores: getCandidateScores(radarCompare, keys, source) });
+                    layers.push({ label: data?.traits?.[`/${radarCompare}`]?.candidate_name || radarCompare, color: '#f59e0b', fill: 'rgba(245,158,11,0.12)', scores: getCandidateScores(radarCompare, keys, source) });
                   }
                 }
                 return layers;
@@ -1225,14 +1225,14 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                         <select value={radarCandidate || ''} onChange={e => setRadarCandidate(e.target.value)}
                           className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
                           <option value="" disabled>Select candidate</option>
-                          {candidateIds.map(cid => <option key={cid} value={cid}>{cid}</option>)}
+                          {candidateIds.map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
                         </select>
                         <span className="text-[10px] text-slate-400">vs</span>
                         <select value={radarCompare} onChange={e => setRadarCompare(e.target.value)}
                           className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
                           <option value="winners">Winning Persona (avg)</option>
                           <option value="rejects">Reject Persona (avg)</option>
-                          {candidateIds.filter(c => c !== radarCandidate).map(cid => <option key={cid} value={cid}>{cid}</option>)}
+                          {candidateIds.filter(c => c !== radarCandidate).map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
                         </select>
                       </>
                     )}
