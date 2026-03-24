@@ -135,14 +135,20 @@ export default function Home() {
 
     addLog('cubby', `[WRITE] hiring-scores/${candidateId} = ${JSON.stringify(scoreResult.score)}`);
 
-    // Move to next step immediately — don't block on data refresh
+    // Inject results directly into client state so step 3 renders immediately
+    setData((prev: any) => ({
+      ...prev,
+      traits: { ...(prev?.traits || {}), [`/${candidateId}`]: extractResult.traits },
+      scores: { ...(prev?.scores || {}), [`/${candidateId}`]: scoreResult.score },
+      statuses: { ...(prev?.statuses || {}), [`/${candidateId}`]: { candidate_id: candidateId, role, stage: 'ai_scored', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } },
+    }));
+
     setLatestCandidate(candidateId);
     setLoading(false);
     setActiveStep(3);
     setCandidateId('');
     setResumeText('');
 
-    // Refresh data in background (may be slow on serverless)
     fetchData().catch(() => {});
   };
 
