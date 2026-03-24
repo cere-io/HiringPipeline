@@ -66,6 +66,7 @@ export async function POST(req: Request) {
                         problem_solving: result.analysis.problem_solving,
                         summary: result.analysis.summary,
                         red_flags: result.analysis.red_flags,
+                        startup_fit: result.analysis.startup_fit || null,
                         analyzed_at: new Date().toISOString(),
                     }, { onConflict: 'candidate_id' });
                 } catch {}

@@ -324,7 +324,7 @@ function computeDualRadar(traits: Record<string, any>, interviews: Record<string
         candidates.push({
             cid,
             profileDna: t?.profile_dna || null,
-            startupFit: iv?.analysis?.startup_fit || null,
+            startupFit: iv?.analysis?.startup_fit || iv?.startup_fit || null,
             result,
         });
     }
