@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { analyzeTranscript, createContext, logPipelineEvent } from '@/lib/runtime';
+import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/agents/types';
 
 /**
@@ -53,6 +54,23 @@ export async function POST(req: Request) {
             
             // Execute the transcript analyzer agent
             const result = await analyzeTranscript({ candidateId, role, transcriptText }, context);
+
+            // Persist interview analysis to Supabase
+            if (result.analysis) {
+                try {
+                    await supabase.from('interview_analyses').upsert({
+                        candidate_id: candidateId,
+                        technical_depth: result.analysis.technical_depth,
+                        communication_clarity: result.analysis.communication_clarity,
+                        cultural_fit: result.analysis.cultural_fit,
+                        problem_solving: result.analysis.problem_solving,
+                        summary: result.analysis.summary,
+                        red_flags: result.analysis.red_flags,
+                        analyzed_at: new Date().toISOString(),
+                    }, { onConflict: 'candidate_id' });
+                } catch {}
+            }
+
             return NextResponse.json({ ...result, logs, source: 'HR-2026-E2E Email Scraper' });
         }
     } catch (e: any) {
