@@ -85,11 +85,19 @@ Scoring guidance:
         try {
             await Promise.all([
                 supabase.from('candidate_traits').upsert({
-                    candidate_id: candidateId, ...traits,
-                    skills: traits.skills, company_stages: traits.company_stages,
-                    schools: traits.schools, hard_things_done: traits.hard_things_done,
-                    hackathons: traits.hackathons, open_source_contributions: traits.open_source_contributions,
-                    company_signals: traits.company_signals, source_completeness: traits.source_completeness,
+                    candidate_id: candidateId,
+                    skills: traits.skills || [],
+                    years_of_experience: traits.years_of_experience || 0,
+                    company_stages: traits.company_stages || [],
+                    education_level: traits.education_level || 'None',
+                    schools: traits.schools || { items: [], rating: 0 },
+                    hard_things_done: traits.hard_things_done || { items: [], rating: 0 },
+                    hackathons: traits.hackathons || { items: [], rating: 0 },
+                    open_source_contributions: traits.open_source_contributions || { items: [], rating: 0 },
+                    company_signals: traits.company_signals || { items: [], rating: 0 },
+                    conclusive_score: traits.conclusive_score || 0,
+                    source_completeness: traits.source_completeness || { has_resume: true, has_linkedin: false },
+                    extracted_at: traits.extracted_at || new Date().toISOString(),
                 }, { onConflict: 'candidate_id' }),
                 supabase.from('candidate_scores').upsert({
                     candidate_id: candidateId,
