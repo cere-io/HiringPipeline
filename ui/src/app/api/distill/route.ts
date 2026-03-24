@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
             const result = await distillExecute({ candidateId, role, outcome, source, isPerformanceReview, feedback, reasons }, context);
 
-            // Persist outcome to Supabase
+            // Persist outcome + weights to Supabase
             try {
                 await supabase.from('candidate_outcomes').upsert({
                     candidate_id: candidateId,
@@ -88,6 +88,17 @@ export async function POST(req: Request) {
                     recorded_at: new Date().toISOString(),
                 }, { onConflict: 'candidate_id' });
             } catch {}
+
+            // Persist updated role weights
+            if (result.new_weights) {
+                try {
+                    const { updated_at, ...weightCols } = result.new_weights as any;
+                    await supabase.from('role_weights').upsert({
+                        role,
+                        ...weightCols,
+                    }, { onConflict: 'role' });
+                } catch {}
+            }
 
             return NextResponse.json({ ...result, logs });
         }
