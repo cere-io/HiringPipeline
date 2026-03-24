@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { mockCubbies, logPipelineEvent } from '@/lib/runtime';
 import { supabase } from '@/lib/supabase';
-import { CandidateStatus, PipelineStage } from '@/lib/agents/types';
+import type { CandidateStatus, PipelineStage } from '@/lib/agents/types';
 
 const STAGE_ORDER: PipelineStage[] = ['applied', 'ai_scored', 'human_review', 'interview', 'hired', 'performance_review'];
 
@@ -11,21 +10,24 @@ function nextStage(current: PipelineStage): PipelineStage | null {
     return STAGE_ORDER[idx + 1];
 }
 
-/**
- * Reconstruct candidate status from pipeline_events when in-memory cubby is empty.
- * This handles the Vercel serverless case where each invocation has fresh memory.
- */
-async function getStatusFromEvents(candidateId: string): Promise<CandidateStatus | null> {
+async function getStatus(candidateId: string): Promise<CandidateStatus | null> {
+    // Try in-memory cubbies first (works locally where memory is shared)
+    try {
+        const { mockCubbies } = await import('@/lib/runtime');
+        const status = await mockCubbies['hiring-status']?.json?.get(`/${candidateId}`);
+        if (status) return status;
+    } catch {}
+
+    // Fallback: reconstruct from pipeline_events (works on Vercel serverless)
     try {
         const { data } = await supabase
             .from('pipeline_events')
             .select('event_type, payload, created_at')
             .eq('candidate_id', candidateId)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: true });
 
         if (!data || data.length === 0) return null;
 
-        // Find the latest STAGE_CHANGE event, or infer from NEW_APPLICATION
         let stage: PipelineStage = 'applied';
         let role = '';
         let rejectedAtStage: PipelineStage | undefined;
@@ -33,17 +35,17 @@ async function getStatusFromEvents(candidateId: string): Promise<CandidateStatus
         let createdAt = '';
 
         for (const evt of data) {
+            if (evt.event_type === 'NEW_APPLICATION') {
+                role = evt.payload?.role || role;
+                if (stage === 'applied') stage = 'ai_scored';
+                if (!createdAt) createdAt = evt.created_at;
+            }
             if (evt.event_type === 'STAGE_CHANGE') {
                 stage = evt.payload?.newStage || stage;
                 if (evt.payload?.newStage === 'rejected') {
                     rejectedAtStage = evt.payload?.previousStage;
                     rejectionReasons = evt.payload?.reasons;
                 }
-            }
-            if (evt.event_type === 'NEW_APPLICATION') {
-                role = evt.payload?.role || role;
-                if (stage === 'applied') stage = 'ai_scored';
-                if (!createdAt) createdAt = evt.created_at;
             }
         }
 
@@ -61,6 +63,25 @@ async function getStatusFromEvents(candidateId: string): Promise<CandidateStatus
     }
 }
 
+async function saveStatus(candidateId: string, status: CandidateStatus): Promise<void> {
+    try {
+        const { mockCubbies } = await import('@/lib/runtime');
+        await mockCubbies['hiring-status']?.json?.set(`/${candidateId}`, status);
+    } catch {}
+}
+
+async function logEvent(candidateId: string, previousStage: string, newStage: string, reasons?: string[]): Promise<void> {
+    try {
+        await supabase.from('pipeline_events').insert({
+            id: `evt-stage-${Date.now()}`,
+            event_type: 'STAGE_CHANGE',
+            candidate_id: candidateId,
+            payload: { previousStage, newStage, ...(reasons && reasons.length > 0 ? { reasons } : {}) },
+            source: 'advance',
+        });
+    } catch {}
+}
+
 export async function POST(req: Request) {
     try {
         const { candidateId, decision, reasons } = await req.json();
@@ -69,13 +90,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'Missing candidateId or decision' }, { status: 400 });
         }
 
-        const statusCubby = mockCubbies['hiring-status'];
-        let status: CandidateStatus | null = await statusCubby.json.get(`/${candidateId}`);
-
-        // Fallback: reconstruct status from pipeline_events (handles serverless cold starts)
-        if (!status) {
-            status = await getStatusFromEvents(candidateId);
-        }
+        const status = await getStatus(candidateId);
 
         if (!status) {
             return NextResponse.json({ success: false, error: 'Candidate not found in pipeline' }, { status: 404 });
@@ -96,15 +111,8 @@ export async function POST(req: Request) {
                 ...(rejReasons.length > 0 && { rejection_reasons: rejReasons }),
                 updated_at: now,
             };
-            await statusCubby.json.set(`/${candidateId}`, updated);
-
-            // Persist stage change to pipeline_events so it survives serverless cold starts
-            logPipelineEvent(`evt-stage-${Date.now()}`, 'STAGE_CHANGE', candidateId, {
-                previousStage: status.stage,
-                newStage: 'rejected',
-                reasons: rejReasons.length > 0 ? rejReasons : undefined,
-            }, 'advance').catch(() => {});
-
+            await saveStatus(candidateId, updated);
+            await logEvent(candidateId, status.stage, 'rejected', rejReasons);
             return NextResponse.json({ success: true, status: updated });
         }
 
@@ -118,13 +126,8 @@ export async function POST(req: Request) {
                 stage: next,
                 updated_at: now,
             };
-            await statusCubby.json.set(`/${candidateId}`, updated);
-
-            logPipelineEvent(`evt-stage-${Date.now()}`, 'STAGE_CHANGE', candidateId, {
-                previousStage: status.stage,
-                newStage: next,
-            }, 'advance').catch(() => {});
-
+            await saveStatus(candidateId, updated);
+            await logEvent(candidateId, status.stage, next);
             return NextResponse.json({ success: true, status: updated });
         }
 
