@@ -117,7 +117,7 @@ export default function Home() {
     const scoreRes = await fetch('/api/pipeline/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidateId, role, traits: extractResult.traits })
+      body: JSON.stringify({ candidateId, role, traits: extractResult.traits, candidateName: candidateId })
     });
     const scoreResult = await scoreRes.json();
 
@@ -547,7 +547,7 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
 
       <main className="flex-grow flex flex-col overflow-hidden max-w-7xl mx-auto w-full p-8 gap-6">
 
-        {/* Candidate Queue */}
+        {/* Candidate Pipeline — grouped by stage, collapsible, with delete */}
         {data?.statuses && Object.keys(data.statuses).length > 0 && (() => {
           const statusEntries = Object.entries(data.statuses).map(([key, s]: [string, any]) => ({ cid: key.replace(/^\//, ''), ...s }));
           const stageGroups: Record<string, typeof statusEntries> = {};
@@ -558,7 +558,22 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
           }
           const stageOrder = ['ai_scored', 'human_review', 'interview', 'hired', 'performance_review', 'rejected'];
           const stageLabels: Record<string, string> = { ai_scored: 'Pending Review', human_review: 'In Review', interview: 'Interview', hired: 'Hired', performance_review: 'Performance', rejected: 'Rejected' };
-          const stageColors: Record<string, string> = { ai_scored: 'bg-yellow-100 text-yellow-800 border-yellow-300', human_review: 'bg-indigo-100 text-indigo-800 border-indigo-300', interview: 'bg-teal-100 text-teal-800 border-teal-300', hired: 'bg-green-100 text-green-800 border-green-300', performance_review: 'bg-blue-100 text-blue-800 border-blue-300', rejected: 'bg-red-100 text-red-800 border-red-300' };
+          const stageColors: Record<string, string> = { ai_scored: 'bg-yellow-50 border-yellow-200', human_review: 'bg-indigo-50 border-indigo-200', interview: 'bg-teal-50 border-teal-200', hired: 'bg-green-50 border-green-200', performance_review: 'bg-blue-50 border-blue-200', rejected: 'bg-red-50 border-red-200' };
+          const pillColors: Record<string, string> = { ai_scored: 'border-yellow-300 text-yellow-800', human_review: 'border-indigo-300 text-indigo-800', interview: 'border-teal-300 text-teal-800', hired: 'border-green-300 text-green-800', performance_review: 'border-blue-300 text-blue-800', rejected: 'border-red-300 text-red-700' };
+
+          const handleDelete = async (cid: string) => {
+            if (!confirm(`Remove ${data.traits?.[`/${cid}`]?.candidate_name || cid} from pipeline?`)) return;
+            await fetch('/api/candidates/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ candidateId: cid }) });
+            fetchData().catch(() => {});
+            setData((prev: any) => {
+              const next = { ...prev };
+              for (const k of ['traits', 'scores', 'outcomes', 'interviews', 'statuses']) {
+                if (next[k]) { const copy = { ...next[k] }; delete copy[`/${cid}`]; next[k] = copy; }
+              }
+              return next;
+            });
+            if (latestCandidate === cid) { setLatestCandidate(null); setActiveStep(1); }
+          };
 
           return (
             <div className="flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
@@ -573,35 +588,50 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                     const count = (stageGroups[stage] || []).length;
                     if (count === 0) return null;
                     return (
-                      <span key={stage} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${stageColors[stage] || 'bg-slate-100 text-slate-600'}`}>
+                      <span key={stage} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${pillColors[stage] || 'bg-slate-100 text-slate-600'}`}>
                         {stageLabels[stage] || stage} ({count})
                       </span>
                     );
                   })}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {statusEntries.sort((a, b) => stageOrder.indexOf(a.stage) - stageOrder.indexOf(b.stage)).map(s => {
-                  const score = data.scores?.[`/${s.cid}`]?.composite_score;
-                  const traits = data.traits?.[`/${s.cid}`];
-                  const pillName = traits?.candidate_name || s.cid;
-                  const isActive = latestCandidate === s.cid;
+              <div className="space-y-2">
+                {stageOrder.map(stage => {
+                  const group = stageGroups[stage] || [];
+                  if (group.length === 0) return null;
+                  const MAX_SHOW = 6;
+                  const showAll = group.length <= MAX_SHOW;
                   return (
-                    <button key={s.cid}
-                      onClick={() => {
-                        setLatestCandidate(s.cid);
-                        setGateDecision(null);
-                        setRejectionReasons([]);
-                        const stageToStep: Record<string, number> = { ai_scored: 3, human_review: 3.5, interview: 4, hired: 5, performance_review: 6, rejected: 1 };
-                        setActiveStep(stageToStep[s.stage] ?? 1);
-                      }}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
-                      <span className="font-semibold">{pillName}</span>
-                      {score != null && <span className={`px-1 py-0.5 rounded text-[10px] font-bold ${isActive ? 'bg-blue-500' : score >= 70 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{score.toFixed(0)}</span>}
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isActive ? 'bg-blue-500' : stageColors[s.stage]?.replace('border-', 'border ') || 'bg-slate-100'}`}>
-                        {s.stage === 'rejected' ? 'REJ' : stageLabels[s.stage]?.slice(0, 3).toUpperCase() || s.stage}
-                      </span>
-                    </button>
+                    <div key={stage} className={`rounded-lg border p-2 ${stageColors[stage] || 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">{stageLabels[stage] || stage} ({group.length})</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(showAll ? group : group.slice(0, MAX_SHOW)).map(s => {
+                          const score = data.scores?.[`/${s.cid}`]?.composite_score;
+                          const traits = data.traits?.[`/${s.cid}`];
+                          const pillName = traits?.candidate_name || s.role || s.cid;
+                          const isActive = latestCandidate === s.cid;
+                          return (
+                            <div key={s.cid} className="group relative">
+                              <button
+                                onClick={() => {
+                                  setLatestCandidate(s.cid);
+                                  setGateDecision(null);
+                                  setRejectionReasons([]);
+                                  const stageToStep: Record<string, number> = { ai_scored: 3, human_review: 3.5, interview: 4, hired: 5, performance_review: 6, rejected: 1 };
+                                  setActiveStep(stageToStep[s.stage] ?? 1);
+                                }}
+                                className={`flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg text-xs font-medium transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                                <span className="font-semibold max-w-[120px] truncate">{pillName}</span>
+                                {score != null && <span className={`px-1 py-0.5 rounded text-[10px] font-bold ${isActive ? 'bg-blue-500' : score >= 70 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{score.toFixed(0)}</span>}
+                              </button>
+                              <button onClick={() => handleDelete(s.cid)} title="Remove candidate"
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] leading-none hidden group-hover:flex items-center justify-center hover:bg-red-600">x</button>
+                            </div>
+                          );
+                        })}
+                        {!showAll && <span className="text-[11px] text-slate-400 self-center px-1">+{group.length - MAX_SHOW} more</span>}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

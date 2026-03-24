@@ -19,7 +19,7 @@ const DEFAULT_WEIGHTS = {
 
 export async function POST(req: Request) {
     try {
-        const { candidateId, role, traits } = await req.json();
+        const { candidateId, role, traits, candidateName } = await req.json();
         if (!candidateId || !role || !traits) {
             return NextResponse.json({ success: false, error: 'Missing candidateId, role, or traits' }, { status: 400 });
         }
@@ -98,6 +98,10 @@ Scoring guidance:
                     conclusive_score: traits.conclusive_score || 0,
                     source_completeness: traits.source_completeness || { has_resume: true, has_linkedin: false },
                     extracted_at: traits.extracted_at || new Date().toISOString(),
+                    dimensions: traits.dimensions || {},
+                    profile_dna: traits.profile_dna || null,
+                    candidate_name: candidateName || traits.candidate_name || null,
+                    role,
                 }, { onConflict: 'candidate_id' }),
                 supabase.from('candidate_scores').upsert({
                     candidate_id: candidateId,

@@ -139,7 +139,17 @@ export async function GET(req: Request) {
         console.log(`[JoinPoll] Fetched ${applications.length} recent, ${allNewApps.length} new since ${initTs} (processing ${newApps.length}, batch=${batchLimit})`);
 
         if (newApps.length === 0) {
-            return NextResponse.json({ success: true, processed: 0, message: 'No new applications since last poll.' });
+            return NextResponse.json({
+                success: true,
+                processed: 0,
+                message: 'No new applications since last poll.',
+                debug: {
+                    watermark: initTs,
+                    fetched: applications.length,
+                    alreadyProcessed: processedIds.size,
+                    newestAppDate: applications[0]?.createdAt || null,
+                },
+            });
         }
 
         const results: { id: number; candidateId: string; name: string; role: string }[] = [];
@@ -190,25 +200,43 @@ export async function GET(req: Request) {
                     await conciergeHandle(event, context);
 
                     const now = new Date().toISOString();
-                    const status: CandidateStatus = {
-                        candidate_id: candidateId,
-                        role,
-                        stage: 'ai_scored',
-                        created_at: now,
-                        updated_at: now,
-                    };
-                    await mockCubbies['hiring-status'].json.set(`/${candidateId}`, status);
+                    await mockCubbies['hiring-status'].json.set(`/${candidateId}`, {
+                        candidate_id: candidateId, role, stage: 'ai_scored',
+                        created_at: now, updated_at: now,
+                    });
 
-                    const existingTraits = await mockCubbies['hiring-traits'].json.get(`/${candidateId}`);
-                    if (existingTraits) {
-                        await mockCubbies['hiring-traits'].json.set(`/${candidateId}`, {
-                            ...existingTraits,
-                            candidate_name: candidateName,
-                            candidate_email: app.candidate.email,
-                            role,
-                            source: 'join',
-                            linkedin_url: app.candidate.professionalLinks?.find(l => l.type === 'LINKEDIN')?.url,
-                        });
+                    // Persist to Supabase so data survives on Vercel
+                    const traits = await mockCubbies['hiring-traits'].json.get(`/${candidateId}`);
+                    const score = await mockCubbies['hiring-scores'].json.get(`/${candidateId}`);
+                    if (traits) {
+                        traits.candidate_name = candidateName;
+                        traits.role = role;
+                        await mockCubbies['hiring-traits'].json.set(`/${candidateId}`, traits);
+                        try {
+                            await supabase.from('candidate_traits').upsert({
+                                candidate_id: candidateId,
+                                skills: traits.skills, years_of_experience: traits.years_of_experience,
+                                company_stages: traits.company_stages, education_level: traits.education_level,
+                                schools: traits.schools, hard_things_done: traits.hard_things_done,
+                                hackathons: traits.hackathons, open_source_contributions: traits.open_source_contributions,
+                                company_signals: traits.company_signals, conclusive_score: traits.conclusive_score || 0,
+                                source_completeness: traits.source_completeness,
+                                extracted_at: traits.extracted_at || now,
+                                dimensions: traits.dimensions || {},
+                                profile_dna: traits.profile_dna || null,
+                                candidate_name: candidateName,
+                                role,
+                            }, { onConflict: 'candidate_id' });
+                        } catch {}
+                    }
+                    if (score) {
+                        try {
+                            await supabase.from('candidate_scores').upsert({
+                                candidate_id: candidateId,
+                                composite_score: score.composite_score, reasoning: score.reasoning,
+                                weights_used: score.weights_used, scored_at: score.timestamp || now,
+                            }, { onConflict: 'candidate_id' });
+                        } catch {}
                     }
                 }
 
