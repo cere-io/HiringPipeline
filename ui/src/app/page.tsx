@@ -135,12 +135,15 @@ export default function Home() {
 
     addLog('cubby', `[WRITE] hiring-scores/${candidateId} = ${JSON.stringify(scoreResult.score)}`);
 
-    await fetchData();
+    // Move to next step immediately — don't block on data refresh
     setLatestCandidate(candidateId);
     setLoading(false);
     setActiveStep(3);
     setCandidateId('');
     setResumeText('');
+
+    // Refresh data in background (may be slow on serverless)
+    fetchData().catch(() => {});
   };
 
   const handleInterviewWebhook = async (cid: string, cRole: string) => {
