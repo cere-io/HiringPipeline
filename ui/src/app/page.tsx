@@ -1132,7 +1132,8 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                   if (!pd) return keys.map(() => 0);
                   return keys.map(k => pd[k] ?? 0);
                 }
-                const sf = data?.interviews?.[`/${cid}`]?.analysis?.startup_fit;
+                const iv = data?.interviews?.[`/${cid}`];
+                const sf = iv?.analysis?.startup_fit || iv?.startup_fit;
                 if (!sf) return keys.map(() => 0);
                 return keys.map(k => sf[k] ?? 0);
               };
@@ -1141,6 +1142,7 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
 
               const buildLayers = (keys: string[], source: 'profile_dna' | 'startup_fit', aggregateAxes: any[]): Layer[] => {
                 const layers: Layer[] = [];
+                const getName = (cid: string) => data?.traits?.[`/${cid}`]?.candidate_name || cid;
 
                 if (radarMode === 'aggregate') {
                   const hasWR = aggregateAxes.some((a: any) => a.winner_score > 0 || a.reject_score > 0);
@@ -1151,13 +1153,15 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                     layers.push({ label: 'All', color: '#6366f1', fill: 'rgba(99,102,241,0.12)', scores: aggregateAxes.map((a: any) => a.all_score || 0) });
                   }
                 } else if (radarCandidate) {
-                  layers.push({ label: radarCandidate, color: '#3b82f6', fill: 'rgba(59,130,246,0.15)', scores: getCandidateScores(radarCandidate, keys, source) });
-                  if (radarCompare === 'winners') {
+                  layers.push({ label: getName(radarCandidate), color: '#3b82f6', fill: 'rgba(59,130,246,0.15)', scores: getCandidateScores(radarCandidate, keys, source) });
+                  if (radarCompare === 'none') {
+                    // Current only — no comparison
+                  } else if (radarCompare === 'winners') {
                     layers.push({ label: 'Winners avg', color: '#22c55e', fill: 'rgba(34,197,94,0.08)', scores: aggregateAxes.map((a: any) => a.winner_score || 0) });
                   } else if (radarCompare === 'rejects') {
                     layers.push({ label: 'Rejects avg', color: '#ef4444', fill: 'rgba(239,68,68,0.08)', scores: aggregateAxes.map((a: any) => a.reject_score || 0) });
                   } else if (radarCompare && radarCompare !== radarCandidate) {
-                    layers.push({ label: radarCompare, color: '#f59e0b', fill: 'rgba(245,158,11,0.12)', scores: getCandidateScores(radarCompare, keys, source) });
+                    layers.push({ label: getName(radarCompare), color: '#f59e0b', fill: 'rgba(245,158,11,0.12)', scores: getCandidateScores(radarCompare, keys, source) });
                   }
                 }
                 return layers;
@@ -1227,14 +1231,15 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
                         <select value={radarCandidate || ''} onChange={e => setRadarCandidate(e.target.value)}
                           className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
                           <option value="" disabled>Select candidate</option>
-                          {candidateIds.map(cid => <option key={cid} value={cid}>{cid}</option>)}
+                          {candidateIds.map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
                         </select>
                         <span className="text-[10px] text-slate-400">vs</span>
                         <select value={radarCompare} onChange={e => setRadarCompare(e.target.value)}
                           className="text-xs border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400">
-                          <option value="winners">Winning Persona (avg)</option>
-                          <option value="rejects">Reject Persona (avg)</option>
-                          {candidateIds.filter(c => c !== radarCandidate).map(cid => <option key={cid} value={cid}>{cid}</option>)}
+                          <option value="none">Current Only</option>
+                          <option value="winners">vs Winners (avg)</option>
+                          <option value="rejects">vs Rejects (avg)</option>
+                          {candidateIds.filter(c => c !== radarCandidate).map(cid => <option key={cid} value={cid}>{data?.traits?.[`/${cid}`]?.candidate_name || cid}</option>)}
                         </select>
                       </>
                     )}
