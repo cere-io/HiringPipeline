@@ -308,24 +308,42 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
 
   const handleGateDecision = async (cid: string, decision: 'advance' | 'reject', nextStep: number) => {
     setIsAdvancing(true);
-    const res = await fetch('/api/advance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidateId: cid, decision, reasons: decision === 'reject' ? rejectionReasons : undefined })
-    });
-    const result = await res.json();
-    if (result.success) {
-      addLog('system', decision === 'advance'
-        ? `Candidate ${cid} advanced to next stage`
-        : `Candidate ${cid} REJECTED — reasons: ${rejectionReasons.join(', ')}`);
-      if (decision === 'advance') {
-        setActiveStep(nextStep);
+    try {
+      const res = await fetch('/api/advance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId: cid, decision, reasons: decision === 'reject' ? rejectionReasons : undefined })
+      });
+      const result = await res.json();
+      if (result.success) {
+        addLog('system', decision === 'advance'
+          ? `Candidate ${cid} advanced to next stage`
+          : `Candidate ${cid} REJECTED — reasons: ${rejectionReasons.join(', ')}`);
+
+        // Update local state directly so UI transitions without waiting for fetchData
+        const newStage = result.status?.stage;
+        if (newStage) {
+          setData((prev: any) => ({
+            ...prev,
+            statuses: { ...(prev?.statuses || {}), [`/${cid}`]: result.status },
+          }));
+        }
+
+        if (decision === 'advance') {
+          setActiveStep(nextStep);
+        } else {
+          setActiveStep(1);
+          setLatestCandidate(null);
+        }
+
+        // Background refresh — don't block UI
+        fetchData().catch(() => {});
       } else {
-        setActiveStep(1);
-        setLatestCandidate(null);
+        addLog('system', `Gate decision failed: ${result.error || 'Unknown error'}`);
       }
+    } catch (e: any) {
+      addLog('system', `Gate decision error: ${e.message}`);
     }
-    await fetchData();
     setIsAdvancing(false);
     setGateDecision(null);
     setRejectionReasons([]);
