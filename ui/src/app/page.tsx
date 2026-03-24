@@ -45,6 +45,8 @@ export default function Home() {
   const [radarCompare, setRadarCompare] = useState<'winners' | 'rejects' | string>('winners');
   const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateRoleFilter, setCandidateRoleFilter] = useState<string>('all');
+  const [isSyncingJoin, setIsSyncingJoin] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ processed: number; message?: string } | null>(null);
 
   const addLog = (type: 'network'|'agent'|'cubby'|'system', message: string) => {
     setTerminalLogs(prev => [...prev, { time: new Date().toISOString().split('T')[1].slice(0, -1), type, message }]);
@@ -442,10 +444,41 @@ Candidate: I try to be very clear in my communication and rely on data-driven AD
             </h1>
             <p className="text-sm text-slate-500 mt-1">Compound Intelligence & Agent Orchestration Demo</p>
           </div>
-          <div className="flex items-center gap-4 text-xs font-medium text-slate-600 bg-slate-100 py-2 px-4 rounded-full border border-slate-200">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> UI Mocking Event Runtime</span>
-            <span className="border-l border-slate-300 h-4 mx-1"></span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400"></span> Agent Runtime: Mock (DDC-compatible)</span>
+          <div className="flex items-center gap-3">
+            <button
+              disabled={isSyncingJoin}
+              onClick={async () => {
+                setIsSyncingJoin(true);
+                setSyncResult(null);
+                addLog('network', 'POST /api/cron/join-poll — Syncing new candidates from Join...');
+                try {
+                  const res = await fetch('/api/cron/join-poll');
+                  const json = await res.json();
+                  setSyncResult({ processed: json.processed || 0, message: json.message });
+                  addLog('system', json.processed > 0
+                    ? `Synced ${json.processed} new candidate(s) from Join`
+                    : json.message || 'No new candidates on Join');
+                  if (json.processed > 0) fetchData();
+                } catch (e: any) {
+                  addLog('system', `Join sync failed: ${e.message}`);
+                  setSyncResult({ processed: 0, message: 'Sync failed' });
+                }
+                setIsSyncingJoin(false);
+                setTimeout(() => setSyncResult(null), 5000);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${isSyncingJoin ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-wait' : 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'}`}
+            >
+              {isSyncingJoin ? (
+                <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> Syncing...</>
+              ) : (
+                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Sync from Join</>
+              )}
+            </button>
+            {syncResult && (
+              <span className={`text-xs font-medium ${syncResult.processed > 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                {syncResult.processed > 0 ? `${syncResult.processed} new candidate${syncResult.processed > 1 ? 's' : ''} added` : syncResult.message || 'No new candidates'}
+              </span>
+            )}
           </div>
         </div>
       </header>
