@@ -100,6 +100,19 @@ export async function POST(req: Request) {
                 } catch {}
             }
 
+            // Persist signals to pipeline_events for Vercel durability
+            if (reasons && reasons.length > 0) {
+                try {
+                    await supabase.from('pipeline_events').insert({
+                        id: `evt-sig-${Date.now()}`,
+                        event_type: 'SIGNALS_INDEXED',
+                        candidate_id: candidateId,
+                        payload: { reasons, outcome, role },
+                        source: 'distill',
+                    });
+                } catch {}
+            }
+
             return NextResponse.json({ ...result, logs });
         }
     } catch (e: any) {
