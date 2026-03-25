@@ -390,7 +390,7 @@ export async function GET() {
                 supabase.from('candidate_outcomes').select('*'),
                 supabase.from('interview_analyses').select('*'),
                 supabase.from('pipeline_events').select('candidate_id, event_type, payload, created_at')
-                    .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE'])
+                    .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE', 'SIGNALS_INDEXED'])
                     .order('created_at', { ascending: true }),
                 supabase.from('role_weights').select('*'),
             ]);
@@ -398,6 +398,33 @@ export async function GET() {
             if (dbTraits.data && dbTraits.data.length > 0) {
                 traits = {};
                 for (const row of dbTraits.data) {
+                    // Compute profile_dna on-the-fly if missing (Join-synced candidates)
+                    if (!row.profile_dna && row.skills) {
+                        const yoe = row.years_of_experience || 0;
+                        row.profile_dna = {
+                            education: Math.min(10, Math.max(0, row.schools?.rating || 0)),
+                            company_caliber: Math.min(10, Math.max(0, row.company_signals?.rating || 0)),
+                            career_arc: Math.min(10, Math.max(0, Math.round(yoe * 0.8))),
+                            technical_depth: Math.min(10, Math.max(0, Math.round((row.skills?.length || 0) * 0.4))),
+                            proof_of_work: Math.min(10, Math.max(0, row.hard_things_done?.rating || 0)),
+                            public_signal: Math.min(10, Math.max(0, row.open_source_contributions?.rating || 0)),
+                        };
+                    }
+                    if (!row.dimensions || Object.keys(row.dimensions).length === 0) {
+                        const yoe = row.years_of_experience || 0;
+                        const stages = row.company_stages || [];
+                        row.dimensions = {
+                            education_level: row.education_level || 'None',
+                            yoe_bucket: yoe <= 2 ? '0-2' : yoe <= 5 ? '3-5' : yoe <= 10 ? '6-10' : '10+',
+                            has_startup: stages.includes('startup'),
+                            has_growth_stage: stages.includes('growth') || stages.includes('series_b'),
+                            has_open_source: (row.open_source_contributions?.items?.length || 0) > 0,
+                            has_hackathons: (row.hackathons?.items?.length || 0) > 0,
+                            has_hard_things: (row.hard_things_done?.rating || 0) >= 6,
+                            hard_things_bucket: (row.hard_things_done?.rating || 0) >= 7 ? 'high' : (row.hard_things_done?.rating || 0) >= 4 ? 'mid' : 'low',
+                            schools_bucket: (row.schools?.rating || 0) >= 7 ? 'high' : (row.schools?.rating || 0) >= 4 ? 'mid' : 'low',
+                        };
+                    }
                     traits[`/${row.candidate_id}`] = row;
                 }
             }
@@ -441,6 +468,40 @@ export async function GET() {
                         if (evt.payload?.newStage === 'rejected') {
                             statuses[key].rejected_at_stage = evt.payload?.previousStage;
                             statuses[key].rejection_reasons = evt.payload?.reasons;
+                        }
+                    }
+                }
+            }
+
+            // Reconstruct signals from SIGNALS_INDEXED events
+            if (dbEvents.data) {
+                const sigEvents = dbEvents.data.filter((e: any) => e.event_type === 'SIGNALS_INDEXED');
+                if (sigEvents.length > 0 && Object.keys(signals).length === 0) {
+                    signals = {};
+                    for (const evt of sigEvents) {
+                        const reasons = evt.payload?.reasons || [];
+                        const outcome = evt.payload?.outcome || 5;
+                        const cid = evt.candidate_id;
+                        for (const reason of reasons) {
+                            const sigId = reason.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
+                            if (signals[sigId]) {
+                                signals[sigId].occurrence_count += 1;
+                                signals[sigId].strength = Math.min(1, signals[sigId].strength + 0.1);
+                                if (!signals[sigId].candidate_ids.includes(cid)) signals[sigId].candidate_ids.push(cid);
+                                signals[sigId].outcome_entries.push({ candidate_id: cid, outcome, timestamp: evt.created_at });
+                                signals[sigId].avg_outcome = signals[sigId].outcome_entries.reduce((s: number, e: any) => s + e.outcome, 0) / signals[sigId].outcome_entries.length;
+                                signals[sigId].last_seen = evt.created_at;
+                            } else {
+                                signals[sigId] = {
+                                    id: sigId, signal: reason, category: 'hard_things_done',
+                                    direction: outcome >= 7 ? 'positive' : 'negative',
+                                    strength: 0.5, occurrence_count: 1,
+                                    candidate_ids: [cid],
+                                    avg_outcome: outcome,
+                                    outcome_entries: [{ candidate_id: cid, outcome, timestamp: evt.created_at }],
+                                    first_seen: evt.created_at, last_seen: evt.created_at,
+                                };
+                            }
                         }
                     }
                 }
