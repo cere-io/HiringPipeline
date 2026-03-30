@@ -1,67 +1,85 @@
-# Hiring Pipeline — Compound Intelligence
+# Compound Intelligence — GraphRAG Knowledge Graph
 
-AI-powered hiring pipeline that makes every hire smarter than the last. Integrates with **Join.com** for candidate sourcing, uses **Gemini AI** for trait extraction and scoring, and builds a compound intelligence system that learns from human decisions.
+Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts traits, scores subjects, learns from outcomes, and builds a queryable graph of entities and relationships. Designed as a modular component that plugs into existing infrastructure.
 
 **Live:** [hiring-pipeline.vercel.app](https://hiring-pipeline.vercel.app)
 
-## How It Works
+## Architecture
 
 ```
-Join.com ATS ──► Cron Poller ──► Trait Extractor (Gemini) ──► Scorer (Gemini)
-                                        │                          │
-                                        ▼                          ▼
-                                  Profile DNA               AI Score (0-100)
-                                  Dimensions                 Reasoning
-                                        │                          │
-                                        └──────────┬───────────────┘
-                                                   ▼
-                                          Human Review (1-10)
-                                          + Trait-level reasons
-                                                   │
-                                                   ▼
-                                      Distillation Agent (Gemini)
-                                      ├── Updates role weights
-                                      ├── Indexes trait signals
-                                      └── Tracks sourcing stats
-                                                   │
-                                                   ▼
-                                        Compound Intelligence
-                                        ├── Winning DNA (radar charts)
-                                        ├── Startup Fit (6-axis)
-                                        ├── Trait Breakdown
-                                        └── Signal Catalog
+┌───────────────────────────────────────────────────────────────┐
+│                    AGENT PROCESSING LAYER                     │
+│                                                               │
+│  Agents:  Extractor → Scorer → Distiller → Analyzer          │
+│           PatternDiscovery → GraphIndexer → QueryEngine       │
+│                                                               │
+│  Schema:  Dynamic trait schemas (any domain)                  │
+│  Storage: Postgres / Memory (pluggable)                       │
+│  LLM:    Gemini (pluggable — OpenAI, etc.)                   │
+│                                                               │
+│  API:  /api/v1/extract    /api/v1/score                      │
+│        /api/v1/distill    /api/v1/analyze                    │
+│        /api/v1/graph      /api/v1/index-graph                │
+│        /api/v1/schemas    /api/v1/analytics                  │
+│        /api/v1/patterns   /api/v1/seed                       │
+└──────────────────────┬────────────────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+┌──────────────┐ ┌───────────┐ ┌────────────────┐
+│  Join.com    │ │  Notion   │ │  Generic       │
+│  Adapter     │ │  Adapter  │ │  Webhook       │
+└──────────────┘ └───────────┘ └────────────────┘
+                       │
+                       ▼
+        ┌──────────────────────────┐
+        │    KNOWLEDGE GRAPH       │
+        │                          │
+        │  graph_nodes (entities)  │
+        │  graph_edges (relations) │
+        │  graph_queries (presets) │
+        │  pgvector (embeddings)   │
+        └──────────────────────────┘
 ```
 
-## 6-Step Pipeline
+### Intelligence SDK (`ui/src/lib/compound-intelligence/`)
 
-| Step | What Happens |
-|------|-------------|
-| **1. Apply** | Candidate submits resume (manual paste, PDF upload, or auto-synced from Join.com) |
-| **2. AI Score** | Gemini extracts traits, dimensions, Profile DNA, then scores 0-100 with reasoning |
-| **3. Human Review** | Reviewer scores 1-10 with trait-level reasons. Distillation agent adjusts role weights |
-| **4. Interview** | Transcript analyzed by Gemini for technical depth, communication, cultural fit, problem-solving, and Startup Fit (6 axes) |
-| **5. Distill** | Performance review after hire. Compound intelligence loop updates weights again |
-| **6. Done** | Candidate journey complete. Weights, signals, and patterns feed into next candidate |
+| Agent | What it does |
+|-------|-------------|
+| **Extractor** | Takes text + schema → structured traits |
+| **Scorer** | Takes traits + weights → composite score 0-100 |
+| **Distiller** | Takes outcome → adjusts weights (learning loop) |
+| **Analyzer** | Takes documents → dimensional scores |
+| **PatternDiscovery** | Finds trait clusters across subjects |
+| **GraphIndexer** | Converts traits/scores/analyses into graph nodes and edges |
+| **GraphQueryEngine** | Natural language queries against the knowledge graph |
 
-## Compound Intelligence
+### ATS Adapters (`ui/src/lib/adapters/`)
 
-The system learns from every decision:
+| Adapter | Status |
+|---------|--------|
+| **Join.com** | Implemented — polls API, downloads PDFs, extracts text |
+| **Notion** | Implemented — ingests candidates from Notion databases |
+| **Generic Webhook** | Implemented — field mapping for any JSON payload |
 
-- **Winning DNA** — Radar chart comparing winners vs rejects across 6 Profile DNA axes + 6 Startup Fit axes
-- **Trait Breakdown** — Statistical analysis of which traits correlate with successful hires
-- **Signal Catalog** — Qualitative signals from human review reasons, tracked across candidates
-- **Role Weights** — Dynamic scoring weights that shift based on hire outcomes
+## UI Dashboard
 
-## Tech Stack
+Three-tab GraphRAG Explorer:
 
-| Component | Technology |
-|-----------|-----------|
-| Frontend | Next.js 16, React 19, Tailwind 4 |
-| AI | Google Gemini 2.0/2.5 Flash |
-| Database | Supabase (Postgres) |
-| ATS Integration | Join.com API v2 |
-| Deployment | Vercel (serverless) |
-| Roles | Notion API |
+| Tab | Features |
+|-----|----------|
+| **Graph Queries** | Natural language query input, categorized preset queries (Talent Intelligence, Pattern Insights, Compounding, Cross-Domain), force-directed graph visualization with zoom/pan/click, node detail panel, answer display |
+| **Agent Flows** | Visual processing pipeline (Ingest → Extract → Score → Analyze → Distill → Index → Graph), data flow description, graph statistics, node/edge breakdowns |
+| **Indexing** | Run full reindex, connected adapter status, indexing job history, graph node/edge statistics |
+
+### Graph Query Categories
+
+| Category | Example Queries |
+|----------|----------------|
+| **Talent Intelligence** | "Who are the strongest candidates?", "Startup + Big Tech mix", "Best role fit" |
+| **Pattern Insights** | "Winning traits", "Rejection patterns", "High scorer profile" |
+| **Compounding** | "Weight evolution", "Strongest signals", "Learning velocity" |
+| **Cross-Domain** | "Open source vs interviews", "Education vs outcomes", "Company caliber vs performance" |
 
 ## Quick Start
 
@@ -72,103 +90,74 @@ cp .env.local.example .env.local  # Add your keys
 npm run dev -- -p 3006
 ```
 
-Open [http://localhost:3006](http://localhost:3006).
-
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEMINI_API_KEY` | Yes | Google Gemini API key |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
-| `JOIN_API_TOKEN` | Yes | Join.com API token (Advanced/Enterprise plan) |
-| `NOTION_API_KEY` | Optional | Notion API key for dynamic role list |
-| `NOTION_ROLES_DB_ID` | Optional | Notion database ID for roles |
-| `STORAGE_MODE` | Optional | `mock` (default) / `dual` / `postgres` |
-| `CRON_SECRET` | Auto | Set by Vercel for cron job auth |
+| `NEXT_PUBLIC_SUPABASE_URL` | For Postgres mode | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | For Postgres mode | Supabase service role key |
+| `STORAGE_MODE` | No | `mock` for in-memory, omit for Postgres |
+| `JOIN_API_TOKEN` | No | Join.com API token |
+| `NOTION_API_KEY` | No | Notion API key |
 
-## API Routes
+## v1 API Reference
 
-### Pipeline
+### GraphRAG
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/pipeline/extract` | POST | Extract traits from resume (Edge Runtime) |
-| `/api/pipeline/score` | POST | Score candidate from extracted traits |
-| `/api/advance` | POST | Advance or reject candidate in pipeline |
-| `/api/distill` | POST | Submit human review, trigger distillation |
+| `/api/v1/graph` | GET | Get graph data, stats, and preset queries |
+| `/api/v1/graph` | POST | Execute NL query or preset query against graph |
+| `/api/v1/index-graph` | POST | Run full reindex to build/rebuild knowledge graph |
+| `/api/v1/index-graph` | GET | Get indexing jobs and stats |
 
-### Join.com Integration
+### Intelligence Engine
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/cron/join-poll` | GET | Poll Join for new applications (daily cron) |
-| `/api/join/latest` | GET | Get the most recent Join candidate |
-| `/api/webhooks/join` | POST | Receive Join webhook / manual sync |
+| `/api/v1/extract` | POST | Extract traits + dual-write to graph |
+| `/api/v1/score` | POST | Score subject + dual-write to graph |
+| `/api/v1/distill` | POST | Feed outcome + dual-write to graph |
+| `/api/v1/analyze` | POST | Analyze document + dual-write to graph |
+| `/api/v1/weights` | GET | Get current weights |
+| `/api/v1/analytics` | GET | Full analytics |
+| `/api/v1/patterns` | POST/GET | Discover trait patterns |
+| `/api/v1/seed` | POST | Seed test candidates |
 
-### Data & Candidates
+### Schema Management
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/data` | GET | All pipeline data (traits, scores, outcomes, statuses, analytics) |
-| `/api/candidates/[id]` | GET | Single candidate detail |
-| `/api/candidates/delete` | POST | Remove candidate from all tables |
-| `/api/health` | GET | System health check |
+| `/api/v1/schemas` | GET | List all trait schemas |
+| `/api/v1/schemas` | POST | Create schema |
 
-### Webhooks
-| Route | Method | Description |
-|-------|--------|-------------|
-| `/api/webhooks/interview` | POST | Submit interview transcript for analysis |
-| `/api/webhooks/notion` | POST | Receive human score from Notion |
-| `/api/upload` | POST | Upload PDF resume for text extraction |
+## Database
 
-## Database Schema (Supabase)
+Run migrations in order:
+1. `ui/supabase/migration.sql` — v1 tables
+2. `ui/supabase/migration-v2.sql` — v2 tables (schemas, CI data)
+3. `ui/supabase/migration-v3.sql` — v3 tables (knowledge graph, pgvector)
 
-| Table | Purpose |
-|-------|---------|
-| `candidate_traits` | Skills, experience, dimensions, Profile DNA, candidate name |
-| `candidate_scores` | AI composite score, reasoning, weights used |
-| `candidate_outcomes` | Human review scores, performance reviews |
-| `interview_analyses` | Interview scores, summary, Startup Fit, red flags |
-| `role_weights` | Dynamic scoring weights per role |
-| `sourcing_stats` | Aggregate stats per source (Join, Wellfound, etc.) |
-| `pipeline_events` | Audit trail for all pipeline events |
+### v3 Tables (GraphRAG)
+`graph_nodes`, `graph_edges`, `graph_queries`, `graph_index_jobs`
 
-## Project Structure
+### v2 Tables
+`trait_schemas`, `schema_weights`, `ci_traits`, `ci_scores`, `ci_outcomes`, `ci_analyses`, `ci_signals`, `ci_sourcing_stats`, `ci_experiments`, `ci_adapter_connections`
 
-```
-ui/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx                    # Main UI (pipeline stepper + compound intelligence)
-│   │   └── api/                        # 16 API routes
-│   └── lib/
-│       ├── runtime.ts                  # Lazy cubby initialization (Vercel-compatible)
-│       ├── join-client.ts              # Join.com API v2 client
-│       ├── supabase.ts                 # Supabase client
-│       ├── postgres-cubby.ts           # Postgres-backed cubby storage
-│       ├── dual-write-cubby.ts         # Dual-write (mock + Postgres)
-│       └── agents/
-│           ├── concierge.ts            # Orchestrates extract → score
-│           ├── trait-extractor.ts       # Gemini trait extraction
-│           ├── scorer.ts               # Gemini composite scoring
-│           ├── transcript-analyzer.ts   # Interview transcript analysis + Startup Fit
-│           ├── distillation.ts          # Weight adjustment + signal indexing
-│           └── types.ts                # All TypeScript types
-├── supabase/
-│   └── migration.sql                   # Database schema
-└── vercel.json                         # Vercel config + cron schedule
-```
+## Tech Stack
 
-## Deployment
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16.1.6 (App Router) |
+| Runtime | React 19.2.3, TypeScript 5 |
+| Styling | Tailwind CSS 4 |
+| Database | Supabase (Postgres) + pgvector |
+| Graph Viz | d3-force (canvas-based) |
+| LLM | Google Gemini (pluggable) |
+| Deployment | Vercel |
 
-Deployed on Vercel with auto-deploy from `main` branch.
+## Dual-Write Architecture
 
-- **Production:** [hiring-pipeline.vercel.app](https://hiring-pipeline.vercel.app)
-- **Cron:** Daily at 9 AM UTC — polls Join.com for new candidates
-- **Root Directory:** `ui`
+Every candidate update (extract, score, distill, analyze) automatically writes to:
+1. **Flat tables** (ci_traits, ci_scores, etc.) for backward compatibility
+2. **Knowledge graph** (graph_nodes, graph_edges) for graph queries and visualization
 
-### Required Vercel Environment Variables
-Set these in Vercel Project Settings → Environment Variables:
-- `GEMINI_API_KEY`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `JOIN_API_TOKEN`
-- `STORAGE_MODE=dual`
+The knowledge graph compounds intelligence by building entity relationships that grow with each new data point.
