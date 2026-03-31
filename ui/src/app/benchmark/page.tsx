@@ -449,9 +449,9 @@ export default function BenchmarkPage() {
                   <Hint text="Average signed difference (AI minus Human). Positive = this AI tends to give higher scores than humans. Negative = tends to score lower." />
                 </div>
                 <p className="text-lg font-semibold mt-1">
-                  {data.system_stats.avg_bias > 0 ? (
+                  {data.system_stats.avg_bias != null && data.system_stats.avg_bias > 0 ? (
                     <span className="text-amber-400">+{data.system_stats.avg_bias} (over-rates)</span>
-                  ) : data.system_stats.avg_bias < 0 ? (
+                  ) : data.system_stats.avg_bias != null && data.system_stats.avg_bias < 0 ? (
                     <span className="text-blue-400">{data.system_stats.avg_bias} (under-rates)</span>
                   ) : (
                     <span className="text-emerald-400">0 (unbiased)</span>
