@@ -23,6 +23,20 @@ function now(): string {
   return new Date().toISOString();
 }
 
+function resolveHiringStatus(notionStatus?: string, outcomeScore?: number): 'hired' | 'rejected' | 'pending' {
+  if (notionStatus) {
+    const lower = notionStatus.toLowerCase();
+    if (lower.includes('hired') || lower.includes('offer')) return 'hired';
+    if (lower.includes('reject') || lower.includes('archived') || lower.includes('declined') || lower.includes('withdrawn')) return 'rejected';
+    return 'pending';
+  }
+  if (outcomeScore != null) {
+    if (outcomeScore >= 7) return 'hired';
+    if (outcomeScore <= 3) return 'rejected';
+  }
+  return 'pending';
+}
+
 export class GraphIndexer {
   constructor(private storage: CIStorage) {}
 
@@ -43,13 +57,16 @@ export class GraphIndexer {
     const candidateNodeId = nodeId('candidate', subjectId);
     const candidateLabel = subjectName || traits.subject_name || subjectId;
 
+    const notionStatus = (traits as any).subject_meta?.notionStatus as string | undefined;
+    const hiringStatus = resolveHiringStatus(notionStatus, outcome?.outcome);
+
     pendingNodes.push({
       id: candidateNodeId, node_type: 'candidate', label: candidateLabel,
       properties: {
         subject_id: subjectId,
         composite_score: score?.composite_score ?? null,
         role: score?.role ?? outcome?.role ?? null,
-        status: outcome ? (outcome.outcome >= 7 ? 'hired' : outcome.outcome <= 3 ? 'rejected' : 'pending') : 'pending',
+        status: hiringStatus,
         profile_scores: traits.profile_scores || null,
       },
       schema_id: schema.id, created_at: ts, updated_at: ts,
@@ -101,7 +118,7 @@ export class GraphIndexer {
     }
 
     if (outcome) {
-      const outcomeLabel = outcome.outcome >= 7 ? 'Hired' : outcome.outcome <= 3 ? 'Rejected' : 'Pending';
+      const outcomeLabel = hiringStatus === 'hired' ? 'Hired' : hiringStatus === 'rejected' ? 'Rejected' : 'Pending';
       const outcomeNodeId = nodeId('outcome', outcomeLabel);
       pendingNodes.push({ id: outcomeNodeId, node_type: 'outcome', label: outcomeLabel, properties: { score: outcome.outcome }, schema_id: schema.id, created_at: ts, updated_at: ts });
       pendingEdges.push(this._edge(candidateNodeId, outcomeNodeId, 'has_outcome', outcome.outcome / 10, schema.id));
@@ -136,6 +153,8 @@ export class GraphIndexer {
     await this.storage.saveIndexJob(job);
 
     try {
+      await this.storage.clearGraph(schema.id);
+
       const [allTraits, allScores, allOutcomes, allAnalyses] = await Promise.all([
         this.storage.listTraits(schema.id),
         this.storage.listScores(schema.id),
@@ -163,8 +182,10 @@ export class GraphIndexer {
         job.subjects_processed++;
       }
 
-      job.nodes_created = totalNodes;
-      job.edges_created = totalEdges;
+      // Query actual unique counts from DB instead of upsert operation counts
+      const realStats = await this.storage.getGraphStats(schema.id);
+      job.nodes_created = realStats.total_nodes;
+      job.edges_created = realStats.total_edges;
       job.status = 'completed';
       job.completed_at = now();
       await this.storage.updateIndexJob(jobId, job);

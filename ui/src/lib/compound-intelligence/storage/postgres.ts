@@ -274,13 +274,22 @@ export class PostgresStorage implements CIStorage {
   }
 
   async listNodes(opts?: { type?: string; schemaId?: string; limit?: number }): Promise<GraphNode[]> {
-    let q = supabase.from('graph_nodes').select('*');
-    if (opts?.type) q = q.eq('node_type', opts.type);
-    if (opts?.schemaId) q = q.eq('schema_id', opts.schemaId);
-    q = q.order('created_at', { ascending: false });
-    if (opts?.limit) q = q.limit(opts.limit);
-    const { data } = await q;
-    return (data || []) as GraphNode[];
+    const pageSize = 1000;
+    const maxRows = opts?.limit || 10000;
+    const allRows: any[] = [];
+
+    for (let from = 0; from < maxRows; from += pageSize) {
+      const to = Math.min(from + pageSize - 1, maxRows - 1);
+      let q = supabase.from('graph_nodes').select('*');
+      if (opts?.type) q = q.eq('node_type', opts.type);
+      if (opts?.schemaId) q = q.eq('schema_id', opts.schemaId);
+      q = q.order('id', { ascending: true }).range(from, to);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return allRows as GraphNode[];
   }
 
   async deleteNode(id: string): Promise<void> {
@@ -313,18 +322,36 @@ export class PostgresStorage implements CIStorage {
       schema_id: e.schema_id || null,
     }));
     for (let i = 0; i < rows.length; i += 50) {
-      await supabase.from('graph_edges').upsert(rows.slice(i, i + 50), { onConflict: 'id' });
+      const batch = rows.slice(i, i + 50);
+      const { error } = await supabase.from('graph_edges').upsert(batch, { onConflict: 'id' });
+      if (error) {
+        console.error(`[GraphEdges] Batch upsert failed (${i}-${i + batch.length}):`, error.message);
+        for (const row of batch) {
+          const { error: singleErr } = await supabase.from('graph_edges').upsert(row, { onConflict: 'id' });
+          if (singleErr) console.error(`[GraphEdges] Single upsert failed for ${row.id}:`, singleErr.message);
+        }
+      }
     }
   }
 
   async listEdges(opts?: { sourceId?: string; targetId?: string; relationship?: string; schemaId?: string }): Promise<GraphEdge[]> {
-    let q = supabase.from('graph_edges').select('*');
-    if (opts?.sourceId) q = q.eq('source_id', opts.sourceId);
-    if (opts?.targetId) q = q.eq('target_id', opts.targetId);
-    if (opts?.relationship) q = q.eq('relationship', opts.relationship);
-    if (opts?.schemaId) q = q.eq('schema_id', opts.schemaId);
-    const { data } = await q;
-    return (data || []) as GraphEdge[];
+    const pageSize = 1000;
+    const allRows: any[] = [];
+
+    for (let from = 0; from < 10000; from += pageSize) {
+      const to = from + pageSize - 1;
+      let q = supabase.from('graph_edges').select('*');
+      if (opts?.sourceId) q = q.eq('source_id', opts.sourceId);
+      if (opts?.targetId) q = q.eq('target_id', opts.targetId);
+      if (opts?.relationship) q = q.eq('relationship', opts.relationship);
+      if (opts?.schemaId) q = q.eq('schema_id', opts.schemaId);
+      q = q.order('id', { ascending: true }).range(from, to);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return allRows as GraphEdge[];
   }
 
   async deleteEdge(id: string): Promise<void> {
@@ -339,9 +366,28 @@ export class PostgresStorage implements CIStorage {
     return { nodes, edges };
   }
 
+  async clearGraph(schemaId: string): Promise<void> {
+    // Supabase DELETE has a default 1000-row limit per call — loop until all rows are gone
+    // Edges must be deleted first (foreign key on source_id/target_id → graph_nodes.id)
+    for (let pass = 0; pass < 20; pass++) {
+      const { count } = await supabase
+        .from('graph_edges')
+        .delete({ count: 'exact' })
+        .eq('schema_id', schemaId);
+      if (!count || count === 0) break;
+    }
+    for (let pass = 0; pass < 20; pass++) {
+      const { count } = await supabase
+        .from('graph_nodes')
+        .delete({ count: 'exact' })
+        .eq('schema_id', schemaId);
+      if (!count || count === 0) break;
+    }
+  }
+
   async getGraphStats(schemaId?: string): Promise<GraphStats> {
-    let nodeQ = supabase.from('graph_nodes').select('node_type', { count: 'exact' });
-    let edgeQ = supabase.from('graph_edges').select('relationship', { count: 'exact' });
+    let nodeQ = supabase.from('graph_nodes').select('node_type', { count: 'exact' }).range(0, 9999);
+    let edgeQ = supabase.from('graph_edges').select('relationship', { count: 'exact' }).range(0, 9999);
     if (schemaId) {
       nodeQ = nodeQ.eq('schema_id', schemaId);
       edgeQ = edgeQ.eq('schema_id', schemaId);
