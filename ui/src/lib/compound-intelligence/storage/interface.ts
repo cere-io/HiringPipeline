@@ -91,6 +91,7 @@ export interface CIStorage {
   deleteEdge(id: string): Promise<void>;
 
   getGraphForSchema(schemaId: string): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }>;
+  clearGraph(schemaId: string): Promise<void>;
   getGraphStats(schemaId?: string): Promise<GraphStats>;
 
   listGraphQueries(category?: string): Promise<GraphQueryTemplate[]>;

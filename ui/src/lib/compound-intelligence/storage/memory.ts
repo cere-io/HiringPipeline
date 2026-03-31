@@ -271,6 +271,15 @@ export class MemoryStorage implements CIStorage {
     };
   }
 
+  async clearGraph(schemaId: string): Promise<void> {
+    for (const [id, node] of this.graphNodes) {
+      if (node.schema_id === schemaId) this.graphNodes.delete(id);
+    }
+    for (const [id, edge] of this.graphEdges) {
+      if (edge.schema_id === schemaId) this.graphEdges.delete(id);
+    }
+  }
+
   async getGraphStats(schemaId?: string): Promise<GraphStats> {
     const nodes = schemaId ? [...this.graphNodes.values()].filter(n => n.schema_id === schemaId) : [...this.graphNodes.values()];
     const edges = schemaId ? [...this.graphEdges.values()].filter(e => e.schema_id === schemaId) : [...this.graphEdges.values()];
