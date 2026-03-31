@@ -144,7 +144,18 @@ function ForceGraph({
 
     import('d3-force').then(d3 => {
       const spread = Math.max(width, height) * 0.4;
-      const simNodes = nodes.map(n => ({
+
+      // Build a set of node IDs that have at least one edge
+      const connectedIds = new Set<string>();
+      for (const e of edges) {
+        connectedIds.add(e.source_id);
+        connectedIds.add(e.target_id);
+      }
+
+      // Only include nodes that participate in at least one edge
+      const connectedNodes = nodes.filter(n => connectedIds.has(n.id));
+
+      const simNodes = connectedNodes.map(n => ({
         ...n,
         x: n.x ?? width / 2 + (Math.random() - 0.5) * spread,
         y: n.y ?? height / 2 + (Math.random() - 0.5) * spread,
@@ -164,9 +175,9 @@ function ForceGraph({
 
       if (simRef.current) simRef.current.stop();
 
-      const chargeStrength = Math.min(-150, -40000 / Math.max(nodes.length, 1));
+      const chargeStrength = Math.min(-120, -30000 / Math.max(connectedNodes.length, 1));
       simRef.current = d3.forceSimulation(simNodes as any)
-        .force('link', d3.forceLink(simEdges as any).id((d: any) => d.id).distance(80).strength(0.2))
+        .force('link', d3.forceLink(simEdges as any).id((d: any) => d.id).distance(60).strength(0.4))
         .force('charge', d3.forceManyBody().strength(chargeStrength))
         .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
         .force('collision', d3.forceCollide().radius((d: any) => (NODE_RADIUS[d.node_type] || 8) + 4))
@@ -204,8 +215,8 @@ function ForceGraph({
       ctx.beginPath();
       ctx.moveTo(src.x, src.y!);
       ctx.lineTo(tgt.x, tgt.y!);
-      ctx.strokeStyle = isHighlighted ? 'rgba(99,102,241,0.6)' : 'rgba(75,85,99,0.15)';
-      ctx.lineWidth = isHighlighted ? 1.5 : 0.5;
+      ctx.strokeStyle = isHighlighted ? 'rgba(129,140,248,0.8)' : 'rgba(148,163,184,0.35)';
+      ctx.lineWidth = isHighlighted ? 2 : 1;
       ctx.stroke();
     }
 
@@ -562,14 +573,21 @@ export default function GraphRAGDashboard() {
     }
   }
 
-  // Sync candidates from Notion (2 at a time to avoid timeout)
+  // Sync candidates from Notion — processes 1 at a time with live progress
   async function syncCandidates() {
     setSyncing(true);
-    setSyncResult('Pulling from Notion...');
+    setSyncResult('Connecting to Notion...');
     try {
       const connRes = await fetch(`/api/v1/index-graph?schema_id=${selectedSchema || ''}`);
       const connData = await connRes.json();
-      const notionAdapters = (connData.adapters || []).filter((a: any) => a.is_active && a.adapter_type === 'notion');
+      const allNotion = (connData.adapters || []).filter((a: any) => a.is_active && a.adapter_type === 'notion');
+      const seen = new Set<string>();
+      const notionAdapters = allNotion.filter((a: any) => {
+        const key = `${a.schema_id}:${a.config?.database_id || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
       if (notionAdapters.length === 0) {
         setSyncResult('No Notion adapter connected. Go to Indexing tab to connect.');
@@ -579,37 +597,56 @@ export default function GraphRAGDashboard() {
       }
 
       let totalProcessed = 0;
+      let totalSkipped = 0;
+      let batchDone = false;
+
       for (const adapter of notionAdapters) {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 300000);
-          const res = await fetch('/api/v1/adapters/poll', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adapter_id: adapter.id, limit: 2 }),
-            signal: controller.signal,
-          });
-          clearTimeout(timeout);
-          const data = await res.json();
-          totalProcessed += data.processed || 0;
-          if (data.processed > 0) {
-            setSyncResult(`Processing... ${totalProcessed} candidates so far`);
+        // Process in small batches of 1, looping until no more new candidates
+        while (!batchDone) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 300000);
+            const res = await fetch('/api/v1/adapters/poll', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ adapter_id: adapter.id, limit: 1 }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            const data = await res.json();
+            totalProcessed += data.processed || 0;
+            totalSkipped += data.skipped_count || 0;
+
+            if (data.processed > 0) {
+              setSyncResult(`Synced ${totalProcessed} candidate${totalProcessed > 1 ? 's' : ''}... (${data.results?.[0]?.name || 'processing'})`);
+              await loadIndexData();
+            } else {
+              batchDone = true;
+            }
+          } catch (e: any) {
+            if (e.name === 'AbortError') {
+              setSyncResult('Sync timed out on a candidate, continuing...');
+            } else {
+              throw e;
+            }
+            batchDone = true;
           }
-        } catch (e: any) {
-          if (e.name !== 'AbortError') throw e;
         }
       }
 
-      setSyncResult(totalProcessed > 0 ? `Synced ${totalProcessed} new candidates` : 'No new candidates to sync');
+      await loadIndexData();
       if (totalProcessed > 0) {
+        setSyncResult(`Done — synced ${totalProcessed} new candidate${totalProcessed > 1 ? 's' : ''}`);
         await loadCandidates();
         await loadGraphData();
+      } else {
+        setSyncResult(`No new candidates to sync (${totalSkipped} already processed)`);
       }
     } catch (e: any) {
       setSyncResult(`Error: ${e.message}`);
     } finally {
       setSyncing(false);
-      setTimeout(() => setSyncResult(''), 8000);
+      setTimeout(() => setSyncResult(''), 10000);
     }
   }
 
@@ -779,7 +816,12 @@ export default function GraphRAGDashboard() {
             )}
             {graphStats && (
               <span className="text-xs text-gray-500">
-                {graphStats.total_nodes} nodes · {graphStats.total_edges} edges
+                {(() => {
+                  const connIds = new Set<string>();
+                  for (const e of graphEdges) { connIds.add(e.source_id); connIds.add(e.target_id); }
+                  const connected = graphNodes.filter(n => connIds.has(n.id)).length;
+                  return `${connected} connected · ${graphNodes.length - connected} orphan · ${graphStats.total_edges} edges`;
+                })()}
               </span>
             )}
           </div>
@@ -1429,9 +1471,9 @@ Content-Type: application/json
           {/* Connected Sources */}
           <div className="mb-6">
             <h3 className="text-sm font-semibold text-gray-300 mb-3">Active Connections</h3>
-            {adapters.length > 0 ? (
+            {adapters.filter(a => a.is_active).length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
-                {adapters.map(a => (
+                {adapters.filter(a => a.is_active).map(a => (
                   <div key={a.id} className="p-3 bg-gray-900 border border-gray-800 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">

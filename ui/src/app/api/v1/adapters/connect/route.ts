@@ -58,6 +58,21 @@ export async function POST(req: Request) {
       }
     }
 
+    // Dedup: check for existing active connection with same adapter_type + schema_id + database_id
+    const existing = await storage.listAdapterConnections();
+    const duplicate = existing.find(c =>
+      c.is_active &&
+      c.adapter_type === adapter_type &&
+      c.schema_id === schema_id &&
+      (adapter_type !== 'notion' || c.config?.database_id === (config?.database_id || process.env.NOTION_CANDIDATES_DB_ID))
+    );
+
+    if (duplicate) {
+      const mergedConfig = { ...duplicate.config, ...config };
+      await storage.updateAdapterConnection(duplicate.id, { config: mergedConfig });
+      return NextResponse.json({ success: true, connection: { ...duplicate, config: mergedConfig }, test: testResult, reused: true });
+    }
+
     const conn: AdapterConnection = {
       id: `adapter-${adapter_type}-${Date.now()}`,
       adapter_type,
@@ -81,6 +96,40 @@ export async function GET() {
     const storage = getStorage();
     const connections = await storage.listAdapterConnections();
     return NextResponse.json({ success: true, connections });
+  } catch (e: any) {
+    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const storage = getStorage();
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    const dedup = url.searchParams.get('dedup');
+
+    if (dedup === 'true') {
+      const all = await storage.listAdapterConnections();
+      const seen = new Map<string, string>();
+      let removed = 0;
+      for (const c of all) {
+        if (!c.is_active) continue;
+        const key = `${c.adapter_type}:${c.schema_id}:${c.config?.database_id || ''}`;
+        if (seen.has(key)) {
+          await storage.updateAdapterConnection(c.id, { is_active: false });
+          removed++;
+        } else {
+          seen.set(key, c.id);
+        }
+      }
+      return NextResponse.json({ success: true, removed });
+    }
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Missing id query param' }, { status: 400 });
+    }
+    await storage.updateAdapterConnection(id, { is_active: false });
+    return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
