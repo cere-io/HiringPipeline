@@ -14,6 +14,13 @@ export interface NotionBlock {
   [key: string]: any;
 }
 
+export interface NotionComment {
+  id: string;
+  author: string;
+  text: string;
+  createdTime: string;
+}
+
 export class NotionClient {
   private token: string;
 
@@ -80,6 +87,35 @@ export class NotionClient {
     } while (cursor);
 
     return blocks;
+  }
+
+  async getPageComments(pageId: string): Promise<NotionComment[]> {
+    const comments: NotionComment[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const url = new URL(`${NOTION_API}/comments`);
+      url.searchParams.set('block_id', pageId);
+      if (cursor) url.searchParams.set('start_cursor', cursor);
+
+      const res = await fetch(url.toString(), { headers: this.headers() });
+      if (!res.ok) break;
+
+      const data = await res.json();
+      for (const c of data.results || []) {
+        const text = (c.rich_text || []).map((t: any) => t.plain_text || '').join('');
+        if (!text.trim()) continue;
+        comments.push({
+          id: c.id,
+          author: c.created_by?.name || c.created_by?.person?.email || 'Unknown',
+          text,
+          createdTime: c.created_time,
+        });
+      }
+      cursor = data.next_cursor || undefined;
+    } while (cursor);
+
+    return comments;
   }
 
   async updatePageProperty(pageId: string, properties: Record<string, any>): Promise<void> {

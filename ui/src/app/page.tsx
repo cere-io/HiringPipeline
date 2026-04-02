@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // ── Types ──────────────────────────────────────────────────────
 interface GraphNode {
@@ -72,26 +72,48 @@ interface Schema {
 }
 
 // ── Constants ──────────────────────────────────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  hired: '#22c55e',
+  rejected: '#ef4444',
+  pending: '#3b82f6',
+};
+
 const NODE_COLORS: Record<string, string> = {
   candidate: '#3b82f6',
   skill: '#8b5cf6',
   company: '#f59e0b',
   trait: '#10b981',
-  role: '#ec4899',
+  role: '#94a3b8',
   outcome: '#ef4444',
   session: '#06b6d4',
   feedback: '#6366f1',
+  evaluator: '#f97316',
+  skill_category: '#a78bfa',
+  signal: '#f59e0b',
 };
 
+function getNodeColor(n: GraphNode): string {
+  if (n.node_type === 'candidate') {
+    return STATUS_COLORS[n.properties?.status] || STATUS_COLORS.pending;
+  }
+  if (n.node_type === 'signal') {
+    return n.properties?.direction === 'positive' ? '#22c55e' : '#ef4444';
+  }
+  return NODE_COLORS[n.node_type] || '#6b7280';
+}
+
 const NODE_RADIUS: Record<string, number> = {
-  candidate: 12,
-  skill: 7,
+  candidate: 16,
+  skill: 6,
   company: 9,
-  trait: 6,
-  role: 10,
+  trait: 7,
+  role: 8,
   outcome: 10,
   session: 8,
   feedback: 6,
+  evaluator: 11,
+  skill_category: 10,
+  signal: 8,
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -132,7 +154,7 @@ function ForceGraph({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const simRef = useRef<any>(null);
   const nodesRef = useRef<GraphNode[]>([]);
-  const edgesRef = useRef<{ source: GraphNode; target: GraphNode; relationship: string; weight: number }[]>([]);
+  const edgesRef = useRef<{ source: GraphNode; target: GraphNode; relationship: string; weight: number; properties?: Record<string, any> }[]>([]);
   const transformRef = useRef({ x: 0, y: 0, k: 1 });
   const dragRef = useRef<{ node: GraphNode | null; active: boolean }>({ node: null, active: false });
   const panRef = useRef<{ active: boolean; startX: number; startY: number; startTx: number; startTy: number }>({
@@ -143,16 +165,14 @@ function ForceGraph({
     if (typeof window === 'undefined') return;
 
     import('d3-force').then(d3 => {
-      const spread = Math.max(width, height) * 0.4;
+      const spread = Math.max(width, height) * 0.5;
 
-      // Build a set of node IDs that have at least one edge
       const connectedIds = new Set<string>();
       for (const e of edges) {
         connectedIds.add(e.source_id);
         connectedIds.add(e.target_id);
       }
 
-      // Only include nodes that participate in at least one edge
       const connectedNodes = nodes.filter(n => connectedIds.has(n.id));
 
       const simNodes = connectedNodes.map(n => ({
@@ -170,20 +190,20 @@ function ForceGraph({
           target: nodeMap.get(e.target_id)!,
           relationship: e.relationship,
           weight: e.weight,
+          properties: e.properties,
         }));
       edgesRef.current = simEdges;
 
       if (simRef.current) simRef.current.stop();
 
-      const chargeStrength = Math.min(-120, -30000 / Math.max(connectedNodes.length, 1));
       simRef.current = d3.forceSimulation(simNodes as any)
-        .force('link', d3.forceLink(simEdges as any).id((d: any) => d.id).distance(60).strength(0.4))
-        .force('charge', d3.forceManyBody().strength(chargeStrength))
-        .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
-        .force('collision', d3.forceCollide().radius((d: any) => (NODE_RADIUS[d.node_type] || 8) + 4))
-        .force('x', d3.forceX(width / 2).strength(0.03))
-        .force('y', d3.forceY(height / 2).strength(0.03))
-        .alphaDecay(0.015)
+        .force('link', d3.forceLink(simEdges as any).id((d: any) => d.id).distance(120).strength(0.3))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2).strength(0.04))
+        .force('collision', d3.forceCollide().radius((d: any) => (NODE_RADIUS[d.node_type] || 8) + 20))
+        .force('x', d3.forceX(width / 2).strength(0.02))
+        .force('y', d3.forceY(height / 2).strength(0.02))
+        .alphaDecay(0.012)
         .on('tick', draw);
     });
 
@@ -199,56 +219,110 @@ function ForceGraph({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const { x: tx, y: ty, k } = transformRef.current;
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, width, height);
     ctx.save();
     ctx.translate(tx, ty);
     ctx.scale(k, k);
 
-    // Edges
+    // Edges — curved bezier lines
     for (const e of edgesRef.current) {
       const src = e.source;
       const tgt = e.target;
-      if (src.x == null || tgt.x == null) continue;
+      if (src.x == null || tgt.x == null || src.y == null || tgt.y == null) continue;
 
       const isHighlighted = highlightIds.size > 0 && (highlightIds.has(src.id) || highlightIds.has(tgt.id));
+      const isSimilarity = e.relationship === 'similar_to';
+
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 1) continue;
+
+      // Curve offset perpendicular to the line
+      const curveAmount = dist * 0.15;
+      const mx = (src.x + tgt.x) / 2 - dy / dist * curveAmount;
+      const my = (src.y + tgt.y) / 2 + dx / dist * curveAmount;
+
       ctx.beginPath();
-      ctx.moveTo(src.x, src.y!);
-      ctx.lineTo(tgt.x, tgt.y!);
-      ctx.strokeStyle = isHighlighted ? 'rgba(129,140,248,0.8)' : 'rgba(148,163,184,0.35)';
-      ctx.lineWidth = isHighlighted ? 2 : 1;
+      ctx.moveTo(src.x, src.y);
+      ctx.quadraticCurveTo(mx, my, tgt.x, tgt.y);
+
+      if (isSimilarity) {
+        ctx.strokeStyle = isHighlighted ? 'rgba(168,85,247,0.6)' : `rgba(168,85,247,${Math.max(0.08, e.weight * 0.3)})`;
+        ctx.lineWidth = isHighlighted ? 2.5 : Math.max(0.8, e.weight * 2);
+      } else {
+        ctx.strokeStyle = isHighlighted ? 'rgba(100,130,180,0.6)' : 'rgba(100,130,180,0.15)';
+        ctx.lineWidth = isHighlighted ? 2 : 1;
+      }
       ctx.stroke();
     }
 
     // Nodes
     for (const n of nodesRef.current) {
       if (n.x == null || n.y == null) continue;
-      const r = NODE_RADIUS[n.node_type] || 7;
-      const color = NODE_COLORS[n.node_type] || '#6b7280';
+      const r = NODE_RADIUS[n.node_type] || 8;
+      const color = getNodeColor(n);
       const isHighlighted = highlightIds.size === 0 || highlightIds.has(n.id);
-      const alpha = isHighlighted ? 1 : 0.2;
+      const alpha = isHighlighted ? 1 : 0.25;
 
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      // Subtle outer glow
+      if (isHighlighted && r >= 8) {
+        const glow = ctx.createRadialGradient(n.x, n.y, r, n.x, n.y, r + 8);
+        glow.addColorStop(0, color + '40');
+        glow.addColorStop(1, color + '00');
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.globalAlpha = alpha;
+        ctx.fill();
+      }
+
+      // Node body
+      if (n.node_type === 'signal') {
+        ctx.beginPath();
+        ctx.moveTo(n.x, n.y - r);
+        ctx.lineTo(n.x + r, n.y);
+        ctx.lineTo(n.x, n.y + r);
+        ctx.lineTo(n.x - r, n.y);
+        ctx.closePath();
+      } else {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      }
       ctx.fillStyle = color;
       ctx.globalAlpha = alpha;
       ctx.fill();
 
+      // Thin border
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
       if (isHighlighted && highlightIds.size > 0) {
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
 
-      // Labels for larger nodes
-      if (r >= 8 && k >= 0.5) {
-        ctx.fillStyle = '#e5e7eb';
-        ctx.globalAlpha = alpha;
-        ctx.font = `${Math.max(8, 10 / k)}px system-ui`;
-        ctx.textAlign = 'center';
-        const label = n.label.length > 18 ? n.label.slice(0, 16) + '...' : n.label;
-        ctx.fillText(label, n.x, n.y + r + 12);
-      }
+      // Label — always visible for named nodes
+      ctx.globalAlpha = alpha;
+      const fontSize = n.node_type === 'candidate' ? Math.max(10, 11 / k) : Math.max(8, 9 / k);
+      ctx.font = `${n.node_type === 'candidate' ? '500 ' : ''}${fontSize}px -apple-system, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = isHighlighted ? '#d1d5db' : '#6b7280';
+
+      let label = n.label;
+      if (label.length > 22) label = label.slice(0, 20) + '...';
+      ctx.fillText(label, n.x, n.y + r + 5);
 
       ctx.globalAlpha = 1;
     }
@@ -387,6 +461,8 @@ export default function GraphRAGDashboard() {
   const [pasteName, setPasteName] = useState('');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [graphDetailLevel, setGraphDetailLevel] = useState<'compact' | 'standard' | 'detailed' | 'full'>('detailed');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
 
   // Load schemas
   useEffect(() => {
@@ -777,6 +853,60 @@ export default function GraphRAGDashboard() {
     setHighlightIds(connectedIds);
   }
 
+  // Extract available roles from graph data
+  const availableRoles = useMemo(() => {
+    return graphNodes
+      .filter(n => n.node_type === 'role' && n.label !== '__default__')
+      .map(n => n.label);
+  }, [graphNodes]);
+
+  // Filter graph by role and detail level
+  const { filteredNodes, filteredEdges } = useMemo(() => {
+    let nodes = graphNodes;
+    let edges = graphEdges;
+
+    // Step 1: Role filter — narrow to candidates for a specific role
+    if (roleFilter !== 'all') {
+      const roleNode = graphNodes.find(n => n.node_type === 'role' && n.label === roleFilter);
+      if (roleNode) {
+        const candidateIds = new Set(
+          edges.filter(e => e.target_id === roleNode.id && e.relationship === 'applied_for').map(e => e.source_id)
+        );
+        candidateIds.add(roleNode.id);
+        // Keep candidates for this role + all nodes connected to them
+        const reachableIds = new Set<string>(candidateIds);
+        for (const e of edges) {
+          if (candidateIds.has(e.source_id)) reachableIds.add(e.target_id);
+          if (candidateIds.has(e.target_id)) reachableIds.add(e.source_id);
+        }
+        nodes = nodes.filter(n => reachableIds.has(n.id));
+        edges = edges.filter(e => reachableIds.has(e.source_id) && reachableIds.has(e.target_id));
+      }
+    }
+
+    // Step 2: Detail level filter
+    if (graphDetailLevel === 'compact') {
+      // Candidates + roles + signals + similarity — the insight graph
+      const COMPACT_TYPES = new Set(['candidate', 'role', 'signal']);
+      const COMPACT_RELS = new Set(['applied_for', 'similar_to', 'has_signal']);
+      nodes = nodes.filter(n => COMPACT_TYPES.has(n.node_type));
+      edges = edges.filter(e => COMPACT_RELS.has(e.relationship));
+    } else if (graphDetailLevel === 'standard') {
+      // + skill categories
+      const STANDARD_TYPES = new Set(['candidate', 'role', 'signal', 'skill_category']);
+      const STANDARD_RELS = new Set(['applied_for', 'similar_to', 'has_signal', 'has_skill']);
+      nodes = nodes.filter(n => STANDARD_TYPES.has(n.node_type));
+      edges = edges.filter(e => STANDARD_RELS.has(e.relationship));
+    } else if (graphDetailLevel === 'detailed') {
+      // + traits (but not individual skills)
+      nodes = nodes.filter(n => n.node_type !== 'skill');
+      edges = edges.filter(e => e.relationship !== 'has_skill' || nodes.some(n => n.id === e.target_id));
+    }
+    // 'full' — no filtering
+
+    return { filteredNodes: nodes, filteredEdges: edges };
+  }, [graphNodes, graphEdges, graphDetailLevel, roleFilter]);
+
   // Group queries by category
   const queryGroups: Record<string, GraphQuery[]> = {};
   for (const q of queries) {
@@ -784,66 +914,38 @@ export default function GraphRAGDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0d1117] text-gray-100 font-[family-name:var(--font-geist-sans)]">
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
+      <header className="border-b border-gray-800/50 px-5 py-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-white">Compound Intelligence</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              GraphRAG Explorer — candidates, traits, patterns, compounding intelligence
-            </p>
+          <div className="flex items-center gap-6">
+            <h1 className="text-base font-semibold text-white">GraphRAG Knowledge Graph Explorer</h1>
+            <span className="text-xs text-gray-500">Select a query to visualize traversal paths and results</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={syncCandidates}
-              disabled={syncing}
-              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:bg-gray-700 text-white text-xs rounded-md font-medium"
-            >
-              {syncing ? 'Syncing...' : 'Sync Candidates'}
+            <button onClick={syncCandidates} disabled={syncing}
+              className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800/50 text-white text-[11px] rounded border border-gray-700">
+              {syncing ? 'Syncing...' : 'Sync'}
             </button>
-            {syncResult && <span className="text-xs text-emerald-400">{syncResult}</span>}
-            {schemas.length > 0 && (
-              <select
-                className="bg-gray-900 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-indigo-500"
-                value={selectedSchema}
-                onChange={e => setSelectedSchema(e.target.value)}
-              >
-                {schemas.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+            {syncResult && <span className="text-[11px] text-emerald-400">{syncResult}</span>}
+            {schemas.length > 1 && (
+              <select className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-gray-300" value={selectedSchema} onChange={e => setSelectedSchema(e.target.value)}>
+                {schemas.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-            )}
-            {graphStats && (
-              <span className="text-xs text-gray-500">
-                {(() => {
-                  const connIds = new Set<string>();
-                  for (const e of graphEdges) { connIds.add(e.source_id); connIds.add(e.target_id); }
-                  const connected = graphNodes.filter(n => connIds.has(n.id)).length;
-                  return `${connected} connected · ${graphNodes.length - connected} orphan · ${graphStats.total_edges} edges`;
-                })()}
-              </span>
             )}
           </div>
         </div>
-
-        {/* Tabs */}
-        <nav className="flex gap-1 mt-4">
+        <nav className="flex gap-0.5 mt-3">
           {[
-            { key: 'queries' as const, label: 'Graph Queries' },
-            { key: 'candidates' as const, label: 'Candidates' },
-            { key: 'agents' as const, label: 'Agent Flows' },
-            { key: 'indexing' as const, label: 'Indexing' },
+            { key: 'queries' as const, label: 'GRAPH QUERIES' },
+            { key: 'candidates' as const, label: 'CANDIDATES' },
+            { key: 'agents' as const, label: 'AGENT FLOWS' },
+            { key: 'indexing' as const, label: 'INDEXING' },
           ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm rounded-t-md transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-gray-900 text-white border-t border-x border-gray-700'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-900/50'
-              }`}
-            >
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              className={`px-3 py-1.5 text-[11px] font-medium tracking-wide rounded-t transition-colors ${
+                activeTab === tab.key ? 'bg-gray-900/80 text-white border-t border-x border-gray-700/50' : 'text-gray-500 hover:text-gray-300'
+              }`}>
               {tab.label}
             </button>
           ))}
@@ -852,74 +954,73 @@ export default function GraphRAGDashboard() {
 
       {/* ── Tab: Graph Queries ─────────────────────────────── */}
       {activeTab === 'queries' && (
-        <div className="flex h-[calc(100vh-130px)]">
-          {/* Left: Query Panel */}
-          <div className="w-[420px] border-r border-gray-800 overflow-y-auto p-4 flex-shrink-0">
-            {/* Custom question */}
-            <div className="mb-5">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customQuestion}
-                  onChange={e => setCustomQuestion(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && customQuestion && runQuery(undefined, customQuestion)}
-                  placeholder="Ask anything about candidates..."
-                  className="flex-1 bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder:text-gray-600"
-                />
-                <button
-                  onClick={() => customQuestion && runQuery(undefined, customQuestion)}
-                  disabled={!customQuestion || !!queryLoading}
-                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 text-white text-sm rounded-md"
-                >
-                  Ask
-                </button>
-              </div>
-            </div>
-
-            {/* Answer display */}
-            {queryAnswer && (
-              <div className="mb-5 p-3 bg-gray-900 border border-gray-700 rounded-lg">
-                <div className="text-xs text-indigo-400 mb-1 font-medium">Answer</div>
-                <p className="text-sm text-gray-200 leading-relaxed">{queryAnswer}</p>
+        <div className="flex h-[calc(100vh-90px)]">
+          {/* Left: Sidebar */}
+          <div className="w-[280px] border-r border-gray-800/50 overflow-y-auto p-3 flex-shrink-0 bg-[#0d1117]">
+            {/* Role filter */}
+            {availableRoles.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-1.5">POSITION</div>
+                <div className="flex flex-wrap gap-1">
+                  <button onClick={() => setRoleFilter('all')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${roleFilter === 'all' ? 'bg-indigo-600/80 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'}`}>
+                    All
+                  </button>
+                  {availableRoles.map(r => (
+                    <button key={r} onClick={() => setRoleFilter(r)}
+                      className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${roleFilter === r ? 'bg-indigo-600/80 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Preset queries by category */}
+            {/* Detail level */}
+            <div className="mb-3">
+              <select value={graphDetailLevel} onChange={e => setGraphDetailLevel(e.target.value as any)}
+                className="w-full bg-gray-800/50 border border-gray-700/50 rounded px-2 py-1.5 text-[11px] text-gray-400 focus:outline-none">
+                <option value="compact">Compact view</option>
+                <option value="standard">Standard view</option>
+                <option value="detailed">Detailed view</option>
+                <option value="full">Full view</option>
+              </select>
+            </div>
+
+            {/* Search */}
+            <div className="mb-4">
+              <div className="flex gap-1">
+                <input type="text" value={customQuestion} onChange={e => setCustomQuestion(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && customQuestion && runQuery(undefined, customQuestion)}
+                  placeholder="Ask about candidates..."
+                  className="flex-1 bg-gray-800/30 border border-gray-700/50 rounded px-2 py-1.5 text-[11px] focus:outline-none focus:border-indigo-500/50 placeholder:text-gray-600" />
+                <button onClick={() => customQuestion && runQuery(undefined, customQuestion)} disabled={!customQuestion || !!queryLoading}
+                  className="px-2 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 disabled:bg-gray-700/50 text-white text-[11px] rounded">Ask</button>
+              </div>
+            </div>
+
+            {queryAnswer && (
+              <div className="mb-3 p-2 bg-indigo-950/30 border border-indigo-800/30 rounded">
+                <p className="text-[11px] text-gray-200 leading-relaxed">{queryAnswer}</p>
+              </div>
+            )}
+
+            {/* Sample queries */}
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-2">SAMPLE QUERIES</div>
             {CATEGORY_ORDER.map(cat => {
               const group = queryGroups[cat];
               if (!group?.length) return null;
               return (
-                <div key={cat} className="mb-5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-2">
-                    {CATEGORY_LABELS[cat] || cat}
-                  </div>
-                  <div className="space-y-1.5">
+                <div key={cat} className="mb-3">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-indigo-400 mb-1.5">{CATEGORY_LABELS[cat] || cat}</div>
+                  <div className="space-y-1">
                     {group.map(q => (
-                      <button
-                        key={q.id}
-                        onClick={() => runQuery(q.id)}
-                        disabled={!!queryLoading}
-                        className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                          queryLoading === q.id
-                            ? 'border-indigo-500 bg-indigo-950/50'
-                            : 'border-gray-800 bg-gray-900/50 hover:border-gray-600 hover:bg-gray-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                            cat === 'talent_intelligence' ? 'bg-blue-900/50 text-blue-400' :
-                            cat === 'pattern_insights' ? 'bg-amber-900/50 text-amber-400' :
-                            cat === 'compounding' ? 'bg-emerald-900/50 text-emerald-400' :
-                            'bg-purple-900/50 text-purple-400'
-                          }`}>
-                            {cat === 'talent_intelligence' ? 'TALENT' :
-                             cat === 'pattern_insights' ? 'PATTERN' :
-                             cat === 'compounding' ? 'COMPOUND' : 'CROSS'}
-                          </span>
-                          <span className="text-sm font-medium text-gray-200">{q.label}</span>
-                          {queryLoading === q.id && <span className="ml-auto text-xs text-indigo-400 animate-pulse">Loading...</span>}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1 ml-0.5">{q.description}</p>
+                      <button key={q.id} onClick={() => runQuery(q.id)} disabled={!!queryLoading}
+                        className={`w-full text-left px-2.5 py-2 rounded border transition-colors text-[11px] ${
+                          queryLoading === q.id ? 'border-indigo-500/50 bg-indigo-950/30 text-indigo-300' : 'border-transparent hover:bg-gray-800/50 text-gray-400 hover:text-gray-200'
+                        }`}>
+                        {q.description}
+                        {queryLoading === q.id && <span className="ml-1 text-indigo-400 animate-pulse">...</span>}
                       </button>
                     ))}
                   </div>
@@ -928,45 +1029,59 @@ export default function GraphRAGDashboard() {
             })}
 
             {Object.keys(queryGroups).length === 0 && (
-              <div className="text-center text-gray-500 py-10">
-                <p className="text-sm">No queries available.</p>
-                <p className="text-xs mt-1">Run indexing first to populate the graph.</p>
-              </div>
+              <div className="text-center text-gray-600 py-6 text-[11px]">Run indexing to populate queries.</div>
             )}
           </div>
 
-          {/* Right: Graph Visualization */}
-          <div className="flex-1 relative" ref={graphContainerRef}>
-            {/* Graph controls */}
-            <div className="absolute top-3 right-3 z-10 flex gap-2">
-              <button
-                onClick={resetView}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 rounded-md border border-gray-700"
-              >
-                Reset View
-              </button>
-              <button
-                onClick={() => setHighlightIds(new Set())}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 rounded-md border border-gray-700"
-              >
-                Clear Highlight
-              </button>
-            </div>
-
-            {/* Node type legend */}
-            <div className="absolute bottom-3 left-3 z-10 flex gap-3 bg-gray-900/90 px-3 py-2 rounded-md border border-gray-800">
-              {Object.entries(NODE_COLORS).map(([type, color]) => (
-                <div key={type} className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="text-[10px] text-gray-400 capitalize">{type}</span>
+          {/* Right: Graph */}
+          <div className="flex-1 relative bg-[#0d1117]" ref={graphContainerRef}>
+            {/* Node Types legend - floating box */}
+            <div className="absolute top-3 left-3 z-10 bg-[#161b22] border border-gray-700/40 rounded-lg px-3 py-2.5 shadow-lg">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2">NODE TYPES</div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.pending }} />
+                  <span className="text-[11px] text-gray-300">Candidate (pending)</span>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.rejected }} />
+                  <span className="text-[11px] text-gray-300">Candidate (rejected)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS.hired }} />
+                  <span className="text-[11px] text-gray-300">Candidate (hired)</span>
+                </div>
+                {filteredNodes.some(n => n.node_type === 'signal' && n.properties?.direction === 'positive') && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rotate-45 bg-emerald-500 rounded-sm" />
+                    <span className="text-[11px] text-gray-300">Strength</span>
+                  </div>
+                )}
+                {filteredNodes.some(n => n.node_type === 'signal' && n.properties?.direction === 'negative') && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rotate-45 bg-red-500 rounded-sm" />
+                    <span className="text-[11px] text-gray-300">Risk</span>
+                  </div>
+                )}
+                {filteredNodes.some(n => n.node_type === 'skill_category') && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: NODE_COLORS.skill_category }} />
+                    <span className="text-[11px] text-gray-300">Skill Group</span>
+                  </div>
+                )}
+                {filteredNodes.some(n => n.node_type === 'role') && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: NODE_COLORS.role }} />
+                    <span className="text-[11px] text-gray-300">Role</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {graphNodes.length > 0 ? (
+            {filteredNodes.length > 0 ? (
               <ForceGraph
-                nodes={graphNodes}
-                edges={graphEdges}
+                nodes={filteredNodes}
+                edges={filteredEdges}
                 highlightIds={highlightIds}
                 onNodeClick={handleNodeClick}
                 width={graphContainerSize.width}
@@ -974,46 +1089,107 @@ export default function GraphRAGDashboard() {
               />
             ) : (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center text-gray-500">
-                  <div className="text-4xl mb-3">⊛</div>
-                  <p className="text-sm font-medium">Knowledge graph is empty</p>
-                  <p className="text-xs mt-1">Go to Indexing tab and run a full reindex</p>
+                <div className="text-center text-gray-600">
+                  <p className="text-sm">Knowledge graph is empty</p>
+                  <p className="text-[11px] mt-1">Go to Indexing tab and run a full reindex</p>
                 </div>
               </div>
             )}
 
-            {/* Selected node detail */}
+            {/* Bottom helper text */}
+            <div className="absolute bottom-3 right-3 z-10 text-[10px] text-gray-600">
+              Drag nodes · Scroll to zoom · Hover for details
+            </div>
+            <div className="absolute bottom-3 left-3 z-10 text-[10px] text-gray-600">
+              {filteredNodes.length} nodes · {filteredEdges.length} edges
+            </div>
+
+            {/* Selected node detail panel */}
             {selectedNode && (
-              <div className="absolute top-3 left-3 z-10 w-72 bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl">
+              <div className="absolute top-3 right-3 z-10 w-72 bg-[#161b22] border border-gray-700/40 rounded-lg p-3 shadow-xl max-h-[75vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: NODE_COLORS[selectedNode.node_type] }} />
-                    <span className="text-xs text-gray-400 uppercase">{selectedNode.node_type}</span>
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getNodeColor(selectedNode) }} />
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wide">{selectedNode.node_type === 'skill_category' ? 'Skill Group' : selectedNode.node_type}</span>
                   </div>
-                  <button
-                    onClick={() => { setSelectedNode(null); setHighlightIds(new Set()); }}
-                    className="text-gray-500 hover:text-gray-300 text-xs"
-                  >
-                    ✕
-                  </button>
+                  <button onClick={() => { setSelectedNode(null); setHighlightIds(new Set()); }} className="text-gray-600 hover:text-gray-300 text-[11px]">✕</button>
                 </div>
-                <h3 className="text-sm font-semibold text-white mb-2">{selectedNode.label}</h3>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {Object.entries(selectedNode.properties).map(([k, v]) => {
-                    if (v == null || (typeof v === 'object' && Object.keys(v).length === 0)) return null;
-                    return (
-                      <div key={k} className="flex justify-between text-xs">
-                        <span className="text-gray-500">{k.replace(/_/g, ' ')}</span>
-                        <span className="text-gray-300 text-right max-w-[160px] truncate">
-                          {typeof v === 'object' ? JSON.stringify(v).slice(0, 50) : String(v)}
-                        </span>
+
+                <h3 className="text-[13px] font-semibold text-white mb-1.5">{selectedNode.label}</h3>
+
+                {selectedNode.node_type === 'candidate' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {selectedNode.properties.composite_score != null && (
+                        <span className="text-base font-mono font-bold text-indigo-400">{selectedNode.properties.composite_score > 10 ? (selectedNode.properties.composite_score / 10).toFixed(1) : Number(selectedNode.properties.composite_score).toFixed(1)}</span>
+                      )}
+                      {selectedNode.properties.role && <span className="text-[11px] text-gray-500">{selectedNode.properties.role}</span>}
+                      {selectedNode.properties.status && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          selectedNode.properties.status === 'hired' ? 'bg-emerald-900/30 text-emerald-400' :
+                          selectedNode.properties.status === 'rejected' ? 'bg-red-900/30 text-red-400' : 'bg-blue-900/30 text-blue-400'
+                        }`}>{selectedNode.properties.status}</span>
+                      )}
+                    </div>
+
+                    {selectedNode.properties.feedback_text && !(Array.isArray(selectedNode.properties.evaluations) && selectedNode.properties.evaluations.length > 0) && (
+                      <div className="p-2 bg-gray-900/50 rounded border border-gray-800/50">
+                        <div className="text-[9px] text-orange-400/80 font-medium mb-1">Human Feedback</div>
+                        <p className="text-[11px] text-gray-300 leading-relaxed">{selectedNode.properties.feedback_text}</p>
                       </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 text-[10px] text-gray-600">
-                  {graphEdges.filter(e => e.source_id === selectedNode.id || e.target_id === selectedNode.id).length} connections
-                </div>
+                    )}
+
+                    {selectedNode.properties.evaluations && Array.isArray(selectedNode.properties.evaluations) && (
+                      <div className="space-y-1.5">
+                        {selectedNode.properties.evaluations.map((ev: any, i: number) => (
+                          <div key={i} className="p-2 bg-gray-900/50 rounded border border-gray-800/50">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] text-orange-400/80 font-medium">{ev.author}</span>
+                              {ev.score != null && <span className="text-[9px] font-mono text-indigo-400">{ev.score}/10</span>}
+                            </div>
+                            {ev.reasoning && <p className="text-[10px] text-gray-400 leading-relaxed">{ev.reasoning}</p>}
+                            {ev.strengths?.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{ev.strengths.map((s: string, j: number) => <span key={j} className="text-[8px] px-1 py-0.5 rounded bg-emerald-900/20 text-emerald-400">{s}</span>)}</div>}
+                            {ev.risks?.length > 0 && <div className="flex flex-wrap gap-1 mt-0.5">{ev.risks.map((r: string, j: number) => <span key={j} className="text-[8px] px-1 py-0.5 rounded bg-red-900/20 text-red-400">{r}</span>)}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(() => {
+                      const simEdges = graphEdges.filter(e => e.relationship === 'similar_to' && (e.source_id === selectedNode.id || e.target_id === selectedNode.id));
+                      if (simEdges.length === 0) return null;
+                      return (
+                        <div className="pt-1.5 border-t border-gray-800/50">
+                          <div className="text-[9px] text-purple-400/80 font-medium mb-1">Similar</div>
+                          {simEdges.slice(0, 5).map(e => {
+                            const otherId = e.source_id === selectedNode.id ? e.target_id : e.source_id;
+                            const other = graphNodes.find(n => n.id === otherId);
+                            return (
+                              <div key={e.id} className="flex items-center justify-between text-[10px] py-0.5">
+                                <span className="text-gray-400">{other?.label || '?'}</span>
+                                <span className="text-purple-400/80 font-mono">{Math.round(e.weight * 100)}%</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {selectedNode.node_type !== 'candidate' && (
+                  <div className="space-y-1">
+                    {Object.entries(selectedNode.properties).filter(([k]) => !['source', 'sources'].includes(k)).map(([k, v]) => {
+                      if (v == null || (typeof v === 'object' && Object.keys(v).length === 0)) return null;
+                      return (
+                        <div key={k} className="flex justify-between text-[11px]">
+                          <span className="text-gray-500">{k.replace(/_/g, ' ')}</span>
+                          <span className="text-gray-300 text-right max-w-[140px] truncate">{typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

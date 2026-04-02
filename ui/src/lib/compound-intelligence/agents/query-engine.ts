@@ -257,15 +257,15 @@ Return ONLY JSON. No markdown.`;
       return target?.properties.trait_key === 'open_source_contributions' && (target?.properties.rating || 0) >= 5;
     }).map(e => e.source_id));
 
-    const withInterview = new Set(sessionEdges.map(e => e.source_id));
+    const withInterview = new Set(candidates.filter(c => c.properties.interview_scores).map(c => c.id));
 
     const both = candidates.filter(c => withOS.has(c.id) && withInterview.has(c.id));
     const osOnly = candidates.filter(c => withOS.has(c.id));
 
     return {
-      nodes: [...both, ...nodes.filter(n => n.node_type === 'session')].slice(0, 50),
-      edges: [...osEdges, ...sessionEdges].slice(0, 100),
-      answer: `${osOnly.length} candidates have strong open source contributions. ${both.length} of them also have interview sessions recorded.`,
+      nodes: [...both].slice(0, 50),
+      edges: osEdges.slice(0, 100),
+      answer: `${osOnly.length} candidates have strong open source contributions. ${both.length} of them also have interview data recorded.`,
     };
   }
 
@@ -323,25 +323,30 @@ Return ONLY JSON. No markdown.`;
     const outcomeCount = Object.keys(outcomes).length;
     const signalCount = Object.keys(signals).length;
     const roleCount = Object.keys(weights).length;
-    const feedbackNodes = nodes.filter(n => n.node_type === 'feedback');
-    const sessionNodes = nodes.filter(n => n.node_type === 'session');
+    const candidates = nodes.filter(n => n.node_type === 'candidate');
+    const withInterview = candidates.filter(c => c.properties.interview_scores);
+    const withFeedback = candidates.filter(c => c.properties.feedback_text || c.properties.outcome_score != null);
+    const evaluators = nodes.filter(n => n.node_type === 'evaluator');
+    const evalEdges = edges.filter(e => e.relationship === 'evaluated_by');
 
     const answer = [
       `Learning Status:`,
       `  Outcomes recorded: ${outcomeCount}`,
       `  Signals indexed: ${signalCount}`,
-      `  Interview analyses: ${sessionNodes.length}`,
-      `  Feedback entries: ${feedbackNodes.length}`,
+      `  Interview analyses: ${withInterview.length}`,
+      `  Candidates with feedback: ${withFeedback.length}`,
+      `  Evaluators: ${evaluators.length}`,
+      `  Evaluator reviews: ${evalEdges.length}`,
       `  Weight profiles: ${roleCount}`,
       ``,
       outcomeCount === 0
-        ? 'The system has not received any human feedback yet. Submit feedback via the Candidates tab to start the learning loop.'
-        : `The system is learning from ${outcomeCount} outcomes. Each new feedback adjusts weights and strengthens signals.`,
+        ? 'The system has not received any human feedback yet. Submit feedback via the Candidates tab or add comments in Notion to start the learning loop.'
+        : `The system is learning from ${outcomeCount} outcomes and ${evalEdges.length} evaluator reviews. Each new feedback adjusts weights and strengthens signals.`,
     ].join('\n');
 
     return {
-      nodes: [...feedbackNodes, ...sessionNodes].slice(0, 30),
-      edges: edges.filter(e => e.relationship === 'received_feedback' || e.relationship === 'interviewed_for').slice(0, 50),
+      nodes: [...evaluators, ...withFeedback].slice(0, 30),
+      edges: evalEdges.slice(0, 50),
       answer,
     };
   }
@@ -421,7 +426,9 @@ Return ONLY JSON. No markdown.`;
     } else if (lower.includes('company') || lower.includes('work')) {
       filtered = nodes.filter(n => n.node_type === 'company');
     } else if (lower.includes('interview') || lower.includes('session')) {
-      filtered = nodes.filter(n => n.node_type === 'session');
+      filtered = nodes.filter(n => n.node_type === 'candidate' && n.properties.interview_scores);
+    } else if (lower.includes('evaluator') || lower.includes('reviewer') || lower.includes('feedback')) {
+      filtered = nodes.filter(n => n.node_type === 'evaluator');
     }
 
     const nodeIds = new Set(filtered.map(n => n.id));
@@ -446,9 +453,24 @@ Return ONLY JSON. No markdown.`;
     for (const [type, group] of Object.entries(byType)) {
       if (type === 'candidate') {
         const candidates = group.sort((a, b) => (b.properties.composite_score || 0) - (a.properties.composite_score || 0));
-        const summaries = candidates.slice(0, 20).map(c =>
-          `  - ${c.id}: "${c.label}" score=${c.properties.composite_score ?? '?'} status=${c.properties.status ?? '?'} role=${c.properties.role ?? '?'}`
-        );
+        const evalEdgeMap = new Map<string, { score: number | null; verdict: string; author: string }[]>();
+        for (const e of edges) {
+          if (e.relationship === 'evaluated_by') {
+            const list = evalEdgeMap.get(e.source_id) || [];
+            const evaluator = nodes.find(n => n.id === e.target_id);
+            list.push({ score: e.properties.score ?? null, verdict: e.properties.verdict ?? '', author: evaluator?.label || '' });
+            evalEdgeMap.set(e.source_id, list);
+          }
+        }
+        const summaries = candidates.slice(0, 20).map(c => {
+          let line = `  - ${c.id}: "${c.label}" score=${c.properties.composite_score ?? '?'} status=${c.properties.status ?? '?'} role=${c.properties.role ?? '?'}`;
+          const evals = evalEdgeMap.get(c.id);
+          if (evals && evals.length > 0) {
+            const evalStr = evals.map(ev => `${ev.author}:${ev.score ?? ev.verdict}`).join(', ');
+            line += ` evaluations=[${evalStr}]`;
+          }
+          return line;
+        });
         lines.push(`\nCandidates (${group.length}):\n${summaries.join('\n')}`);
       } else {
         const labels = group.slice(0, 15).map(n => n.label);
