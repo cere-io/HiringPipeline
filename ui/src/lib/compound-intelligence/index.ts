@@ -140,4 +140,5 @@ export { Scorer } from './agents/scorer';
 export { Distiller } from './agents/distiller';
 export { Analyzer } from './agents/analyzer';
 export { GraphIndexer } from './agents/indexer';
+export type { EvaluatorFeedback } from './agents/indexer';
 export { GraphQueryEngine } from './agents/query-engine';

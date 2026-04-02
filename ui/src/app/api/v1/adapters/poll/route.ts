@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCI, getStorage, getExperimentTracker } from '@/lib/compound-intelligence/runtime';
 import { NotionClient, extractTitle, extractRichText, extractSelect, extractUrl } from '@/lib/adapters/notion/client';
+import { parseAllComments, bestEvaluation } from '@/lib/adapters/notion/comment-parser';
 import { extractText } from 'unpdf';
 import type { ExtractedTraits } from '@/lib/compound-intelligence/types';
 
@@ -169,12 +170,30 @@ export async function POST(req: Request) {
       try {
         const traits = await ci.extract({ schema, subjectId, text: fullText, role });
 
+        // Fetch and parse Notion comments as human evaluator feedback
+        let commentEvaluations: { author: string; score: number | null; verdict: 'positive' | 'negative' | 'neutral'; reasoning: string; strengths: string[]; risks: string[] }[] = [];
+        try {
+          const rawComments = await client.getPageComments(page.id);
+          if (rawComments.length > 0) {
+            const parsed = parseAllComments(rawComments);
+            commentEvaluations = parsed.map(e => ({
+              author: e.author,
+              score: e.score,
+              verdict: e.verdict,
+              reasoning: e.reasoning,
+              strengths: e.strengths,
+              risks: e.risks,
+            }));
+          }
+        } catch {}
+
         const enrichedTraits: ExtractedTraits = {
           ...traits,
           subject_name: name,
           subject_meta: {
             notionStatus, linkedin, notionPageId: page.id, source: 'notion',
             humanScore, aiScore,
+            evaluations: commentEvaluations.length > 0 ? commentEvaluations : undefined,
           },
         };
         await storage.saveTraits(enrichedTraits);
@@ -188,10 +207,39 @@ export async function POST(req: Request) {
           } catch {}
         }
 
-        // If human score exists, auto-distill it as feedback
-        if (humanScore != null && humanScore > 0) {
+        // Distill from Notion comments (each evaluator's feedback feeds the learning loop)
+        let commentDistilled = 0;
+        for (const ev of commentEvaluations) {
+          if (ev.score != null && ev.score > 0) {
+            try {
+              const reasons = [
+                ...ev.strengths,
+                ...ev.risks.map(r => `RISK: ${r}`),
+              ];
+              await ci.distill({
+                schema, subjectId, role,
+                outcome: ev.score,
+                feedback: ev.reasoning,
+                reasons: reasons.length > 0 ? reasons : undefined,
+                source: 'notion',
+              });
+              commentDistilled++;
+            } catch {}
+          }
+        }
+
+        // Fallback: if no comment had a score but humanScore property exists, use that
+        if (commentDistilled === 0 && humanScore != null && humanScore > 0) {
           try {
-            await ci.distill({ schema, subjectId, role, outcome: humanScore, source: 'notion' });
+            const best = commentEvaluations.length > 0 ? commentEvaluations[commentEvaluations.length - 1] : null;
+            const reasons = best ? [...best.strengths, ...best.risks.map(r => `RISK: ${r}`)] : undefined;
+            await ci.distill({
+              schema, subjectId, role,
+              outcome: humanScore,
+              feedback: best?.reasoning,
+              reasons: reasons && reasons.length > 0 ? reasons : undefined,
+              source: 'notion',
+            });
           } catch {}
         }
 
@@ -211,6 +259,8 @@ export async function POST(req: Request) {
           reasoning: score.reasoning,
           status: notionStatus,
           decision,
+          commentsFound: commentEvaluations.length,
+          commentDistilled,
         });
         processed++;
       } catch (e: any) {

@@ -145,7 +145,7 @@ export interface AdapterConnection {
 
 // ── GraphRAG Types ──────────────────────────────────────────────
 
-export type GraphNodeType = 'candidate' | 'skill' | 'company' | 'trait' | 'role' | 'outcome' | 'session' | 'feedback';
+export type GraphNodeType = 'candidate' | 'skill' | 'company' | 'trait' | 'role' | 'outcome' | 'session' | 'feedback' | 'evaluator' | 'skill_category' | 'signal';
 
 export interface GraphNode {
   id: string;
@@ -161,7 +161,8 @@ export interface GraphNode {
 export type GraphRelationship =
   | 'has_skill' | 'worked_at' | 'scored_on' | 'interviewed_for'
   | 'has_trait' | 'similar_to' | 'has_outcome' | 'received_feedback'
-  | 'applied_for' | 'has_education' | 'belongs_to_cluster';
+  | 'applied_for' | 'has_education' | 'belongs_to_cluster'
+  | 'evaluated_by' | 'has_signal';
 
 export interface GraphEdge {
   id: string;

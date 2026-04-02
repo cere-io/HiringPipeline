@@ -1,6 +1,6 @@
 # Compound Intelligence — GraphRAG Knowledge Graph
 
-Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts traits, scores subjects, learns from outcomes, and builds a queryable graph of entities and relationships. Designed as a modular component that plugs into existing infrastructure.
+Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts traits, scores subjects, learns from outcomes, ingests human feedback from Notion comments, and builds a queryable graph of entities, signals, and candidate similarity. Designed as a modular component that plugs into existing infrastructure.
 
 **Live:** [hiring-pipeline.vercel.app](https://hiring-pipeline.vercel.app)
 
@@ -21,7 +21,7 @@ Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts t
 │        /api/v1/distill    /api/v1/analyze                    │
 │        /api/v1/graph      /api/v1/index-graph                │
 │        /api/v1/schemas    /api/v1/analytics                  │
-│        /api/v1/patterns   /api/v1/seed                       │
+│        /api/v1/patterns   /api/v1/reset                      │
 └──────────────────────┬────────────────────────────────────────┘
                        │
         ┌──────────────┼──────────────┐
@@ -29,16 +29,19 @@ Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts t
 ┌──────────────┐ ┌───────────┐ ┌────────────────┐
 │  Join.com    │ │  Notion   │ │  Generic       │
 │  Adapter     │ │  Adapter  │ │  Webhook       │
+│              │ │ +Comments │ │                │
 └──────────────┘ └───────────┘ └────────────────┘
                        │
                        ▼
         ┌──────────────────────────┐
         │    KNOWLEDGE GRAPH       │
         │                          │
-        │  graph_nodes (entities)  │
-        │  graph_edges (relations) │
-        │  graph_queries (presets) │
-        │  pgvector (embeddings)   │
+        │  Candidates (status)     │
+        │  Signals (strengths/     │
+        │    risks from feedback)  │
+        │  Skill Categories        │
+        │  Similarity Edges        │
+        │  Roles                   │
         └──────────────────────────┘
 ```
 
@@ -47,11 +50,11 @@ Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts t
 | Agent | What it does |
 |-------|-------------|
 | **Extractor** | Takes text + schema → structured traits |
-| **Scorer** | Takes traits + weights → composite score 0-100 |
+| **Scorer** | Takes traits + weights → composite score 0-10 |
 | **Distiller** | Takes outcome → adjusts weights (learning loop) |
 | **Analyzer** | Takes documents → dimensional scores |
 | **PatternDiscovery** | Finds trait clusters across subjects |
-| **GraphIndexer** | Converts traits/scores/analyses into graph nodes and edges |
+| **GraphIndexer** | Converts traits/scores/feedback into graph with similarity edges and signal nodes |
 | **GraphQueryEngine** | Natural language queries against the knowledge graph |
 
 ### ATS Adapters (`ui/src/lib/adapters/`)
@@ -59,27 +62,66 @@ Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts t
 | Adapter | Status |
 |---------|--------|
 | **Join.com** | Implemented — polls API, downloads PDFs, extracts text |
-| **Notion** | Implemented — ingests candidates from Notion databases |
+| **Notion** | Implemented — ingests candidates + **page comments as human feedback** |
 | **Generic Webhook** | Implemented — field mapping for any JSON payload |
+
+## Key Features
+
+### Notion Comment Ingestion
+Notion page comments are automatically parsed into structured evaluator feedback:
+- **Verdict** detection (positive/negative/neutral)
+- **Score** extraction (e.g., "Score: 7/10")
+- **Strengths/Risks** parsing into discrete signal nodes
+- Each comment feeds the distiller to adjust scoring weights
+
+### Knowledge Graph Structure
+
+| Node Type | What it represents |
+|-----------|-------------------|
+| **Candidate** | Person — colored by status (green=hired, red=rejected, blue=pending), score shown inside |
+| **Signal** | Human insight from feedback — diamond-shaped, green for strengths, red for risks |
+| **Skill Category** | Aggregated skill group (Backend & Systems, Blockchain & Web3, Data & AI/ML, etc.) |
+| **Role** | Position applied for (Blockchain Engineer, Founding Platform Engineer, etc.) |
+
+| Edge Type | What it connects |
+|-----------|-----------------|
+| **similar_to** | Candidate ↔ Candidate — cosine similarity on ratings + Jaccard on skill categories |
+| **has_signal** | Candidate → Signal — human-observed strength or risk |
+| **has_skill** | Candidate → Skill Category — aggregated technical domain |
+| **applied_for** | Candidate → Role |
+
+### Graph Views
+
+| View | Shows | Use case |
+|------|-------|----------|
+| **Compact** | Candidates + Roles + Signals + Similarity | Quick overview of people, signals, and connections |
+| **Standard** | + Skill Categories | See technical domain overlap |
+| **Detailed** | + Trait nodes (ratings, experience, education) | Deep dive into trait-level connections |
+| **Full** | + Individual skills | Raw data exploration |
+
+### Candidate Similarity
+Computed at index time using:
+- **60% cosine similarity** on rating vectors (hard things done, company signals, open source, etc.)
+- **40% Jaccard similarity** on skill category overlap
+- Pairs above 50% match threshold get a `similar_to` edge
+
+### Compound Intelligence Loop
+```
+Notion Comment → Parse (verdict, score, strengths, risks)
+  → Distiller (adjusts scoring weights)
+  → Signal Catalog (accumulates patterns)
+  → Graph (signal nodes shared across candidates)
+  → Future candidates scored with learned weights
+```
 
 ## UI Dashboard
 
-Three-tab GraphRAG Explorer:
-
 | Tab | Features |
 |-----|----------|
-| **Graph Queries** | Natural language query input, categorized preset queries (Talent Intelligence, Pattern Insights, Compounding, Cross-Domain), force-directed graph visualization with zoom/pan/click, node detail panel, answer display |
-| **Agent Flows** | Visual processing pipeline (Ingest → Extract → Score → Analyze → Distill → Index → Graph), data flow description, graph statistics, node/edge breakdowns |
-| **Indexing** | Run full reindex, connected adapter status, indexing job history, graph node/edge statistics |
-
-### Graph Query Categories
-
-| Category | Example Queries |
-|----------|----------------|
-| **Talent Intelligence** | "Who are the strongest candidates?", "Startup + Big Tech mix", "Best role fit" |
-| **Pattern Insights** | "Winning traits", "Rejection patterns", "High scorer profile" |
-| **Compounding** | "Weight evolution", "Strongest signals", "Learning velocity" |
-| **Cross-Domain** | "Open source vs interviews", "Education vs outcomes", "Company caliber vs performance" |
+| **Graph Queries** | Role filter (position toggle), detail level selector, NL query input, categorized preset queries, force-directed graph with curved edges and glow effects, node detail panel with evaluator feedback and similarity |
+| **Candidates** | Candidate list with scores, add new via paste, interview transcript analysis, human feedback submission |
+| **Agent Flows** | Visual processing pipeline, graph statistics, node/edge breakdowns |
+| **Indexing** | Connect Notion/Webhook/API, run reindex, adapter status, job history |
 
 ## Quick Start
 
@@ -87,7 +129,7 @@ Three-tab GraphRAG Explorer:
 cd ui
 npm install
 cp .env.local.example .env.local  # Add your keys
-npm run dev -- -p 3006
+npm run dev
 ```
 
 ## Environment Variables
@@ -98,8 +140,7 @@ npm run dev -- -p 3006
 | `NEXT_PUBLIC_SUPABASE_URL` | For Postgres mode | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | For Postgres mode | Supabase service role key |
 | `STORAGE_MODE` | No | `mock` for in-memory, omit for Postgres |
-| `JOIN_API_TOKEN` | No | Join.com API token |
-| `NOTION_API_KEY` | No | Notion API key |
+| `NOTION_API_KEY` | No | Notion API key (for comment ingestion) |
 
 ## v1 API Reference
 
@@ -108,26 +149,26 @@ npm run dev -- -p 3006
 |-------|--------|-------------|
 | `/api/v1/graph` | GET | Get graph data, stats, and preset queries |
 | `/api/v1/graph` | POST | Execute NL query or preset query against graph |
-| `/api/v1/index-graph` | POST | Run full reindex to build/rebuild knowledge graph |
+| `/api/v1/index-graph` | POST | Run full reindex (builds similarity edges + signal nodes) |
 | `/api/v1/index-graph` | GET | Get indexing jobs and stats |
+| `/api/v1/reset` | POST | Clear all data for a schema (traits, scores, graph, signals) |
 
 ### Intelligence Engine
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/v1/extract` | POST | Extract traits + dual-write to graph |
-| `/api/v1/score` | POST | Score subject + dual-write to graph |
-| `/api/v1/distill` | POST | Feed outcome + dual-write to graph |
-| `/api/v1/analyze` | POST | Analyze document + dual-write to graph |
+| `/api/v1/extract` | POST | Extract traits from text |
+| `/api/v1/score` | POST | Score subject against role weights |
+| `/api/v1/distill` | POST | Feed outcome to adjust weights |
+| `/api/v1/analyze` | POST | Analyze interview transcript |
 | `/api/v1/weights` | GET | Get current weights |
 | `/api/v1/analytics` | GET | Full analytics |
 | `/api/v1/patterns` | POST/GET | Discover trait patterns |
-| `/api/v1/seed` | POST | Seed test candidates |
 
-### Schema Management
+### Adapters
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/v1/schemas` | GET | List all trait schemas |
-| `/api/v1/schemas` | POST | Create schema |
+| `/api/v1/adapters/connect` | POST/GET | Connect/list data source adapters |
+| `/api/v1/adapters/poll` | POST | Poll Notion for new candidates + comments |
 
 ## Database
 
@@ -136,28 +177,14 @@ Run migrations in order:
 2. `ui/supabase/migration-v2.sql` — v2 tables (schemas, CI data)
 3. `ui/supabase/migration-v3.sql` — v3 tables (knowledge graph, pgvector)
 
-### v3 Tables (GraphRAG)
-`graph_nodes`, `graph_edges`, `graph_queries`, `graph_index_jobs`
-
-### v2 Tables
-`trait_schemas`, `schema_weights`, `ci_traits`, `ci_scores`, `ci_outcomes`, `ci_analyses`, `ci_signals`, `ci_sourcing_stats`, `ci_experiments`, `ci_adapter_connections`
-
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 16.1.6 (App Router) |
-| Runtime | React 19.2.3, TypeScript 5 |
+| Runtime | React 19, TypeScript 5 |
 | Styling | Tailwind CSS 4 |
 | Database | Supabase (Postgres) + pgvector |
-| Graph Viz | d3-force (canvas-based) |
+| Graph Viz | d3-force (HiDPI canvas, curved bezier edges) |
 | LLM | Google Gemini (pluggable) |
 | Deployment | Vercel |
-
-## Dual-Write Architecture
-
-Every candidate update (extract, score, distill, analyze) automatically writes to:
-1. **Flat tables** (ci_traits, ci_scores, etc.) for backward compatibility
-2. **Knowledge graph** (graph_nodes, graph_edges) for graph queries and visualization
-
-The knowledge graph compounds intelligence by building entity relationships that grow with each new data point.
