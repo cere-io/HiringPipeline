@@ -129,4 +129,4 @@ export function createContext() {
     return { context, logs };
 }
 
-export { conciergeHandle, distillExecute, analyzeTranscript, logPipelineEvent };
+export { conciergeHandle, distillExecute, analyzeTranscript };
