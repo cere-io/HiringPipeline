@@ -205,7 +205,7 @@ export async function GET(req: Request) {
                         created_at: now, updated_at: now,
                     });
 
-                    // Persist to Supabase so data survives on Vercel
+                    const SCHEMA_ID = 'hiring-hiring-v1';
                     const traits = await mockCubbies['hiring-traits'].json.get(`/${candidateId}`);
                     const score = await mockCubbies['hiring-scores'].json.get(`/${candidateId}`);
                     if (traits) {
@@ -213,29 +213,37 @@ export async function GET(req: Request) {
                         traits.role = role;
                         await mockCubbies['hiring-traits'].json.set(`/${candidateId}`, traits);
                         try {
-                            await supabase.from('candidate_traits').upsert({
-                                candidate_id: candidateId,
-                                skills: traits.skills, years_of_experience: traits.years_of_experience,
-                                company_stages: traits.company_stages, education_level: traits.education_level,
-                                schools: traits.schools, hard_things_done: traits.hard_things_done,
-                                hackathons: traits.hackathons, open_source_contributions: traits.open_source_contributions,
-                                company_signals: traits.company_signals, conclusive_score: traits.conclusive_score || 0,
-                                source_completeness: traits.source_completeness,
+                            await supabase.from('ci_traits').upsert({
+                                schema_id: SCHEMA_ID,
+                                subject_id: candidateId,
+                                traits: {
+                                    skills: traits.skills, years_of_experience: traits.years_of_experience,
+                                    company_stages: traits.company_stages, education_level: traits.education_level,
+                                    schools: traits.schools, hard_things_done: traits.hard_things_done,
+                                    hackathons: traits.hackathons, open_source_contributions: traits.open_source_contributions,
+                                    company_signals: traits.company_signals, conclusive_score: traits.conclusive_score || 0,
+                                    dimensions: traits.dimensions || {},
+                                },
+                                profile_scores: traits.profile_dna || null,
+                                subject_name: candidateName,
+                                subject_meta: {
+                                    role,
+                                    source_completeness: traits.source_completeness,
+                                    human_feedback_score: traits.human_feedback_score || null,
+                                },
                                 extracted_at: traits.extracted_at || now,
-                                dimensions: traits.dimensions || {},
-                                profile_dna: traits.profile_dna || null,
-                                candidate_name: candidateName,
-                                role,
-                            }, { onConflict: 'candidate_id' });
+                            }, { onConflict: 'schema_id,subject_id' });
                         } catch {}
                     }
                     if (score) {
                         try {
-                            await supabase.from('candidate_scores').upsert({
-                                candidate_id: candidateId,
+                            await supabase.from('ci_scores').upsert({
+                                schema_id: SCHEMA_ID,
+                                subject_id: candidateId,
+                                role,
                                 composite_score: score.composite_score, reasoning: score.reasoning,
                                 weights_used: score.weights_used, scored_at: score.timestamp || now,
-                            }, { onConflict: 'candidate_id' });
+                            }, { onConflict: 'schema_id,subject_id' });
                         } catch {}
                     }
                 }

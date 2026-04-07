@@ -81,35 +81,43 @@ Scoring guidance:
             timestamp: new Date().toISOString(),
         };
 
-        // Persist to Supabase (survives serverless cold starts + page reloads)
+        const SCHEMA_ID = 'hiring-hiring-v1';
         try {
             await Promise.all([
-                supabase.from('candidate_traits').upsert({
-                    candidate_id: candidateId,
-                    skills: traits.skills || [],
-                    years_of_experience: traits.years_of_experience || 0,
-                    company_stages: traits.company_stages || [],
-                    education_level: traits.education_level || 'None',
-                    schools: traits.schools || { items: [], rating: 0 },
-                    hard_things_done: traits.hard_things_done || { items: [], rating: 0 },
-                    hackathons: traits.hackathons || { items: [], rating: 0 },
-                    open_source_contributions: traits.open_source_contributions || { items: [], rating: 0 },
-                    company_signals: traits.company_signals || { items: [], rating: 0 },
-                    conclusive_score: traits.conclusive_score || 0,
-                    source_completeness: traits.source_completeness || { has_resume: true, has_linkedin: false },
+                supabase.from('ci_traits').upsert({
+                    schema_id: SCHEMA_ID,
+                    subject_id: candidateId,
+                    traits: {
+                        skills: traits.skills || [],
+                        years_of_experience: traits.years_of_experience || 0,
+                        company_stages: traits.company_stages || [],
+                        education_level: traits.education_level || 'None',
+                        schools: traits.schools || { items: [], rating: 0 },
+                        hard_things_done: traits.hard_things_done || { items: [], rating: 0 },
+                        hackathons: traits.hackathons || { items: [], rating: 0 },
+                        open_source_contributions: traits.open_source_contributions || { items: [], rating: 0 },
+                        company_signals: traits.company_signals || { items: [], rating: 0 },
+                        conclusive_score: traits.conclusive_score || 0,
+                        dimensions: traits.dimensions || {},
+                    },
+                    profile_scores: traits.profile_dna || null,
+                    subject_name: candidateName || traits.candidate_name || null,
+                    subject_meta: {
+                        role,
+                        source_completeness: traits.source_completeness || { has_resume: true, has_linkedin: false },
+                        human_feedback_score: traits.human_feedback_score || null,
+                    },
                     extracted_at: traits.extracted_at || new Date().toISOString(),
-                    dimensions: traits.dimensions || {},
-                    profile_dna: traits.profile_dna || null,
-                    candidate_name: candidateName || traits.candidate_name || null,
+                }, { onConflict: 'schema_id,subject_id' }),
+                supabase.from('ci_scores').upsert({
+                    schema_id: SCHEMA_ID,
+                    subject_id: candidateId,
                     role,
-                }, { onConflict: 'candidate_id' }),
-                supabase.from('candidate_scores').upsert({
-                    candidate_id: candidateId,
                     composite_score: score.composite_score,
                     reasoning: score.reasoning,
                     weights_used: score.weights_used,
                     scored_at: score.timestamp,
-                }, { onConflict: 'candidate_id' }),
+                }, { onConflict: 'schema_id,subject_id' }),
                 supabase.from('pipeline_events').insert([
                     { id: `evt-app-${Date.now()}`, event_type: 'NEW_APPLICATION', candidate_id: candidateId, payload: { role, source: 'ui' }, source: 'ui' },
                     { id: `evt-score-${Date.now() + 1}`, event_type: 'STAGE_CHANGE', candidate_id: candidateId, payload: { previousStage: 'applied', newStage: 'ai_scored', role, score: score.composite_score }, source: 'ui' },

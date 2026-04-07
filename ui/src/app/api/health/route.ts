@@ -6,7 +6,7 @@ export async function GET() {
 
     // Check Supabase connection
     try {
-        const { data, error } = await supabase.from('role_weights').select('role').limit(1);
+        const { data, error } = await supabase.from('trait_schemas').select('id').limit(1);
         checks.supabase = !error && (data?.length ?? 0) > 0;
     } catch {
         checks.supabase = false;

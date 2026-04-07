@@ -384,66 +384,76 @@ export async function GET() {
 
     if (cubbyEmpty) {
         try {
+            const SCHEMA_ID = 'hiring-hiring-v1';
             const [dbTraits, dbScores, dbOutcomes, dbInterviews, dbEvents, dbWeights] = await Promise.all([
-                supabase.from('candidate_traits').select('*'),
-                supabase.from('candidate_scores').select('*'),
-                supabase.from('candidate_outcomes').select('*'),
-                supabase.from('interview_analyses').select('*'),
+                supabase.from('ci_traits').select('*').eq('schema_id', SCHEMA_ID),
+                supabase.from('ci_scores').select('*').eq('schema_id', SCHEMA_ID),
+                supabase.from('ci_outcomes').select('*').eq('schema_id', SCHEMA_ID),
+                supabase.from('ci_analyses').select('*').eq('schema_id', SCHEMA_ID),
                 supabase.from('pipeline_events').select('candidate_id, event_type, payload, created_at')
                     .in('event_type', ['NEW_APPLICATION', 'STAGE_CHANGE', 'SIGNALS_INDEXED'])
                     .order('created_at', { ascending: true }),
-                supabase.from('role_weights').select('*'),
+                supabase.from('schema_weights').select('*').eq('schema_id', SCHEMA_ID),
             ]);
 
             if (dbTraits.data && dbTraits.data.length > 0) {
                 traits = {};
                 for (const row of dbTraits.data) {
-                    // Compute profile_dna on-the-fly if missing (Join-synced candidates)
-                    if (!row.profile_dna && row.skills) {
-                        const yoe = row.years_of_experience || 0;
-                        row.profile_dna = {
-                            education: Math.min(10, Math.max(0, row.schools?.rating || 0)),
-                            company_caliber: Math.min(10, Math.max(0, row.company_signals?.rating || 0)),
+                    const t = row.traits || {};
+                    const flat: any = {
+                        ...t,
+                        profile_dna: row.profile_scores || null,
+                        candidate_name: row.subject_name,
+                        ...(row.subject_meta || {}),
+                        extracted_at: row.extracted_at,
+                        candidate_id: row.subject_id,
+                    };
+                    if (!flat.profile_dna && t.skills) {
+                        const yoe = t.years_of_experience || 0;
+                        flat.profile_dna = {
+                            education: Math.min(10, Math.max(0, t.schools?.rating || 0)),
+                            company_caliber: Math.min(10, Math.max(0, t.company_signals?.rating || 0)),
                             career_arc: Math.min(10, Math.max(0, Math.round(yoe * 0.8))),
-                            technical_depth: Math.min(10, Math.max(0, Math.round((row.skills?.length || 0) * 0.4))),
-                            proof_of_work: Math.min(10, Math.max(0, row.hard_things_done?.rating || 0)),
-                            public_signal: Math.min(10, Math.max(0, row.open_source_contributions?.rating || 0)),
+                            technical_depth: Math.min(10, Math.max(0, Math.round((t.skills?.length || 0) * 0.4))),
+                            proof_of_work: Math.min(10, Math.max(0, t.hard_things_done?.rating || 0)),
+                            public_signal: Math.min(10, Math.max(0, t.open_source_contributions?.rating || 0)),
                         };
                     }
-                    if (!row.dimensions || Object.keys(row.dimensions).length === 0) {
-                        const yoe = row.years_of_experience || 0;
-                        const stages = row.company_stages || [];
-                        row.dimensions = {
-                            education_level: row.education_level || 'None',
+                    if (!flat.dimensions || Object.keys(flat.dimensions).length === 0) {
+                        const yoe = t.years_of_experience || 0;
+                        const stages = t.company_stages || [];
+                        flat.dimensions = {
+                            education_level: t.education_level || 'None',
                             yoe_bucket: yoe <= 2 ? '0-2' : yoe <= 5 ? '3-5' : yoe <= 10 ? '6-10' : '10+',
                             has_startup: stages.includes('startup'),
                             has_growth_stage: stages.includes('growth') || stages.includes('series_b'),
-                            has_open_source: (row.open_source_contributions?.items?.length || 0) > 0,
-                            has_hackathons: (row.hackathons?.items?.length || 0) > 0,
-                            has_hard_things: (row.hard_things_done?.rating || 0) >= 6,
-                            hard_things_bucket: (row.hard_things_done?.rating || 0) >= 7 ? 'high' : (row.hard_things_done?.rating || 0) >= 4 ? 'mid' : 'low',
-                            schools_bucket: (row.schools?.rating || 0) >= 7 ? 'high' : (row.schools?.rating || 0) >= 4 ? 'mid' : 'low',
+                            has_open_source: (t.open_source_contributions?.items?.length || 0) > 0,
+                            has_hackathons: (t.hackathons?.items?.length || 0) > 0,
+                            has_hard_things: (t.hard_things_done?.rating || 0) >= 6,
+                            hard_things_bucket: (t.hard_things_done?.rating || 0) >= 7 ? 'high' : (t.hard_things_done?.rating || 0) >= 4 ? 'mid' : 'low',
+                            schools_bucket: (t.schools?.rating || 0) >= 7 ? 'high' : (t.schools?.rating || 0) >= 4 ? 'mid' : 'low',
                         };
                     }
-                    traits[`/${row.candidate_id}`] = row;
+                    traits[`/${row.subject_id}`] = flat;
                 }
             }
             if (dbScores.data && dbScores.data.length > 0) {
                 scores = {};
                 for (const row of dbScores.data) {
-                    scores[`/${row.candidate_id}`] = { id: row.candidate_id, composite_score: row.composite_score, reasoning: row.reasoning, weights_used: row.weights_used, timestamp: row.scored_at };
+                    scores[`/${row.subject_id}`] = { id: row.subject_id, composite_score: row.composite_score, reasoning: row.reasoning, weights_used: row.weights_used, timestamp: row.scored_at };
                 }
             }
             if (dbOutcomes.data && dbOutcomes.data.length > 0) {
                 outcomes = {};
                 for (const row of dbOutcomes.data) {
-                    outcomes[`/${row.candidate_id}`] = row;
+                    outcomes[`/${row.subject_id}`] = { candidate_id: row.subject_id, outcome: row.outcome, role: row.role, feedback: row.feedback, is_performance_review: row.is_performance_review, recorded_at: row.recorded_at };
                 }
             }
             if (dbInterviews.data && dbInterviews.data.length > 0) {
                 interviews = {};
                 for (const row of dbInterviews.data) {
-                    interviews[`/${row.candidate_id}`] = row;
+                    const s = row.scores || {};
+                    interviews[`/${row.subject_id}`] = { candidate_id: row.subject_id, technical_depth: s.technical_depth, communication_clarity: s.communication_clarity, cultural_fit: s.cultural_fit, problem_solving: s.problem_solving, summary: row.summary, red_flags: row.flags || [], startup_fit: s.startup_fit, analyzed_at: row.analyzed_at };
                 }
             }
 
@@ -507,12 +517,10 @@ export async function GET() {
                 }
             }
 
-            // Load role weights into meta
             if (dbWeights.data && dbWeights.data.length > 0) {
                 meta = meta || {};
                 for (const row of dbWeights.data) {
-                    const { role: roleName, updated_at, ...weights } = row;
-                    meta[`/trait_weights/${roleName}`] = weights;
+                    meta[`/trait_weights/${row.role}`] = row.weights;
                 }
             }
         } catch (e: any) {

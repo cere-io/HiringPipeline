@@ -58,17 +58,20 @@ export async function POST(req: Request) {
             // Persist interview analysis to Supabase
             if (result.analysis) {
                 try {
-                    await supabase.from('interview_analyses').upsert({
-                        candidate_id: candidateId,
-                        technical_depth: result.analysis.technical_depth,
-                        communication_clarity: result.analysis.communication_clarity,
-                        cultural_fit: result.analysis.cultural_fit,
-                        problem_solving: result.analysis.problem_solving,
+                    await supabase.from('ci_analyses').upsert({
+                        schema_id: 'hiring-hiring-v1',
+                        subject_id: candidateId,
+                        scores: {
+                            technical_depth: result.analysis.technical_depth,
+                            communication_clarity: result.analysis.communication_clarity,
+                            cultural_fit: result.analysis.cultural_fit,
+                            problem_solving: result.analysis.problem_solving,
+                            startup_fit: result.analysis.startup_fit || null,
+                        },
                         summary: result.analysis.summary,
-                        red_flags: result.analysis.red_flags,
-                        startup_fit: result.analysis.startup_fit || null,
+                        flags: result.analysis.red_flags || [],
                         analyzed_at: new Date().toISOString(),
-                    }, { onConflict: 'candidate_id' });
+                    }, { onConflict: 'schema_id,subject_id' });
                 } catch {}
             }
 
