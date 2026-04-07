@@ -9,11 +9,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'Missing candidateId' }, { status: 400 });
         }
 
-        const tables = ['candidate_traits', 'candidate_scores', 'candidate_outcomes', 'interview_analyses'];
+        const SCHEMA_ID = 'hiring-hiring-v1';
+        const tables = ['ci_traits', 'ci_scores', 'ci_outcomes', 'ci_analyses'];
         const results: Record<string, string> = {};
 
         for (const table of tables) {
-            const { error } = await supabase.from(table).delete().eq('candidate_id', candidateId);
+            const { error } = await supabase.from(table).delete()
+                .eq('schema_id', SCHEMA_ID).eq('subject_id', candidateId);
             results[table] = error ? error.message : 'deleted';
         }
 

@@ -3,8 +3,7 @@ import { extract as traitExtract } from './agents/trait-extractor';
 import { score as scoreExecute } from './agents/scorer';
 import { distill as distillExecute } from './agents/distillation';
 import { analyze as analyzeTranscript } from './agents/transcript-analyzer';
-import { PostgresCubby, logPipelineEvent } from './postgres-cubby';
-import { DualWriteCubby } from './dual-write-cubby';
+import { supabase } from './supabase';
 import type { Context, Event } from './agents/types';
 
 class MockCubby {
@@ -30,37 +29,31 @@ class MockCubby {
     }
 }
 
+export async function logPipelineEvent(
+    id: string,
+    eventType: string,
+    candidateId: string | null,
+    payload: any,
+    source?: string
+) {
+    const { error } = await supabase.from('pipeline_events').insert({
+        id, event_type: eventType, candidate_id: candidateId, payload, source,
+    });
+    if (error) console.error('[PG] event log error:', error.message);
+}
+
 const CUBBY_NAMES = ['hiring-traits', 'hiring-scores', 'hiring-interviews', 'hiring-outcomes', 'hiring-meta', 'hiring-signals', 'hiring-status'] as const;
 
-type CubbyMap = Record<string, MockCubby | PostgresCubby | DualWriteCubby>;
+type CubbyMap = Record<string, MockCubby>;
 
 const globalForCubbies = global as unknown as { cubbies: CubbyMap; initialized: boolean };
 
-/**
- * Lazy cubby builder — only runs on first access, never at import/build time.
- * This is critical for Vercel serverless where module-level side effects crash.
- */
 function getCubbies(): CubbyMap {
     if (globalForCubbies.cubbies) return globalForCubbies.cubbies;
 
-    const STORAGE_MODE = (process.env.STORAGE_MODE || 'dual') as 'mock' | 'postgres' | 'dual';
-    const hasSupabase = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const effectiveMode = hasSupabase ? STORAGE_MODE : 'mock';
-
-    if (!hasSupabase && STORAGE_MODE !== 'mock') {
-        console.warn(`[RUNTIME] STORAGE_MODE=${STORAGE_MODE} but no SUPABASE_SERVICE_ROLE_KEY set. Falling back to mock.`);
-    }
-    console.log(`[RUNTIME] Storage mode: ${effectiveMode}`);
-
     const cubbies: CubbyMap = {};
     for (const name of CUBBY_NAMES) {
-        if (effectiveMode === 'mock') {
-            cubbies[name] = new MockCubby();
-        } else if (effectiveMode === 'postgres') {
-            cubbies[name] = new PostgresCubby(name);
-        } else {
-            cubbies[name] = new DualWriteCubby(name, new MockCubby(), new PostgresCubby(name), 'postgres');
-        }
+        cubbies[name] = new MockCubby();
     }
 
     globalForCubbies.cubbies = cubbies;

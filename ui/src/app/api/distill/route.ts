@@ -7,20 +7,30 @@ import type { Event, CandidateStatus } from '@/lib/agents/types';
  * On Vercel serverless, cubbies start empty each invocation.
  * Pre-load candidate data from Supabase so the distillation agent can read it.
  */
+const SCHEMA_ID = 'hiring-hiring-v1';
+
 async function hydrateFromSupabase(candidateId: string, context: ReturnType<typeof createContext>['context']) {
     try {
         const [traitsRes, scoresRes, outcomesRes] = await Promise.all([
-            supabase.from('candidate_traits').select('*').eq('candidate_id', candidateId).single(),
-            supabase.from('candidate_scores').select('*').eq('candidate_id', candidateId).single(),
-            supabase.from('candidate_outcomes').select('*').eq('candidate_id', candidateId).single(),
+            supabase.from('ci_traits').select('*').eq('schema_id', SCHEMA_ID).eq('subject_id', candidateId).single(),
+            supabase.from('ci_scores').select('*').eq('schema_id', SCHEMA_ID).eq('subject_id', candidateId).single(),
+            supabase.from('ci_outcomes').select('*').eq('schema_id', SCHEMA_ID).eq('subject_id', candidateId).single(),
         ]);
 
         if (traitsRes.data) {
-            await context.cubby('hiring-traits').json.set(`/${candidateId}`, traitsRes.data);
+            const row = traitsRes.data;
+            const flat = {
+                ...(row.traits || {}),
+                profile_dna: row.profile_scores || null,
+                candidate_name: row.subject_name,
+                ...(row.subject_meta || {}),
+                extracted_at: row.extracted_at,
+            };
+            await context.cubby('hiring-traits').json.set(`/${candidateId}`, flat);
         }
         if (scoresRes.data) {
             await context.cubby('hiring-scores').json.set(`/${candidateId}`, {
-                id: scoresRes.data.candidate_id,
+                id: scoresRes.data.subject_id,
                 composite_score: scoresRes.data.composite_score,
                 reasoning: scoresRes.data.reasoning,
                 weights_used: scoresRes.data.weights_used,
@@ -28,7 +38,14 @@ async function hydrateFromSupabase(candidateId: string, context: ReturnType<type
             });
         }
         if (outcomesRes.data) {
-            await context.cubby('hiring-outcomes').json.set(`/${candidateId}`, outcomesRes.data);
+            await context.cubby('hiring-outcomes').json.set(`/${candidateId}`, {
+                candidate_id: outcomesRes.data.subject_id,
+                outcome: outcomesRes.data.outcome,
+                role: outcomesRes.data.role,
+                feedback: outcomesRes.data.feedback,
+                is_performance_review: outcomesRes.data.is_performance_review,
+                recorded_at: outcomesRes.data.recorded_at,
+            });
         }
     } catch {}
 }
@@ -77,26 +94,25 @@ export async function POST(req: Request) {
 
             const result = await distillExecute({ candidateId, role, outcome, source, isPerformanceReview, feedback, reasons }, context);
 
-            // Persist outcome + weights to Supabase
             try {
-                await supabase.from('candidate_outcomes').upsert({
-                    candidate_id: candidateId,
+                await supabase.from('ci_outcomes').upsert({
+                    schema_id: SCHEMA_ID,
+                    subject_id: candidateId,
                     outcome,
                     role,
-                    source: source || 'direct',
+                    feedback: feedback || null,
                     is_performance_review: isPerformanceReview || false,
                     recorded_at: new Date().toISOString(),
-                }, { onConflict: 'candidate_id' });
+                }, { onConflict: 'schema_id,subject_id' });
             } catch {}
 
-            // Persist updated role weights
             if (result.new_weights) {
                 try {
-                    const { updated_at, ...weightCols } = result.new_weights as any;
-                    await supabase.from('role_weights').upsert({
+                    await supabase.from('schema_weights').upsert({
+                        schema_id: SCHEMA_ID,
                         role,
-                        ...weightCols,
-                    }, { onConflict: 'role' });
+                        weights: result.new_weights,
+                    }, { onConflict: 'schema_id,role' });
                 } catch {}
             }
 
