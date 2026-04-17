@@ -28,20 +28,26 @@ jobs:
       - name: Install deps
         run: npm ci || npm install
 
-      - name: Run Dinosaur (live LLM if ANTHROPIC_API_KEY set, otherwise offline)
+      - name: Run Dinosaur (live LLM if any key set, otherwise offline)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DINOSAUR_OFFLINE: ${{ secrets.ANTHROPIC_API_KEY != '' && '0' || '1' }}
-          DINOSAUR_PROVIDER: anthropic
-          DINOSAUR_MODEL: claude-haiku-4-5
-        run: npx tsx scripts/dinosaur.ts
+          DINOSAUR_OFFLINE: ${{ (secrets.ANTHROPIC_API_KEY != '' || secrets.GEMINI_API_KEY != '') && '0' || '1' }}
+          DINOSAUR_PROVIDER: ${{ secrets.ANTHROPIC_API_KEY != '' && 'anthropic' || 'gemini' }}
+          DINOSAUR_MODEL: ${{ secrets.ANTHROPIC_API_KEY != '' && 'claude-haiku-4-5' || 'gemini-2.5-flash-lite' }}
+        run: |
+          ls scripts/ drafts/ 2>&1 || true
+          npx tsx scripts/dinosaur.ts
+          echo "--- drafts/ after run ---"
+          ls -la drafts/
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
         with:
           name: dinosaur-report-${{ github.run_id }}
-          path: drafts/dinosaur-*.md drafts/dinosaur-*.json
+          path: |
+            drafts/dinosaur-report.md
+            drafts/dinosaur-data.json
           if-no-files-found: error
           retention-days: 30
 
