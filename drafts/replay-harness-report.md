@@ -1,6 +1,6 @@
 # Hiring Pipeline Replay Harness
 
-Generated: 2026-04-17T13:22:36.695Z
+Generated: 2026-04-17T13:46:42.004Z
 Fixtures: 5 real Notion candidates from week of 2026-04-14.
 Mode: offline deterministic.
 
@@ -10,7 +10,7 @@ Mode: offline deterministic.
 - **Reindex** — same traits, two weight sets (`generalist_baseline` vs `blockchain_engineer_priors`), different composite scores.
 - **Compound** — simulated interviewer scorecard → bounded weight shifts (max 0.05 per weight per correction). Drift accumulates across nightly runs.
 
-Run against Rahul's hiring agent (extractor → scorer → distillation). Isolated from production via the `stream-a9effdd3` replay stream on Sales Agent svc 2662 ws 2304.
+Run against Rahul's hiring agent (extractor → scorer → distillation). Isolated from production via the `stream-2fcefa72` replay stream on Hiring Agent svc 2666 ws 2310.
 
 ---
 

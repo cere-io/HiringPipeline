@@ -20,6 +20,12 @@
  * and checked in as text-only snapshots below so the replay is reproducible without Notion
  * access on the CI runner.
  *
+ * CEF test stream (ROB-verified 2026-04-17):
+ *   Agent Service : Hiring Agent (id 2666, pubkey 0x377faeee...964a6c, bucket 573069)
+ *   Workspace     : 2310 "Hiring Pipeline Replay"
+ *   Stream        : stream-2fcefa72 "candidates-replay"
+ *                   selectors: replay.candidate, notion.candidate.updated, replay.feedback
+ *
  * Outputs:
  *   drafts/replay-harness-report.md   (human-readable)
  *   drafts/replay-harness-data.json   (machine-readable)
@@ -331,7 +337,7 @@ function renderReport(results: FixtureResult[]): string {
   lines.push('- **Reindex** — same traits, two weight sets (`generalist_baseline` vs `blockchain_engineer_priors`), different composite scores.');
   lines.push('- **Compound** — simulated interviewer scorecard → bounded weight shifts (max 0.05 per weight per correction). Drift accumulates across nightly runs.');
   lines.push('');
-  lines.push('Run against Rahul\'s hiring agent (extractor → scorer → distillation). Isolated from production via the `stream-a9effdd3` replay stream on Sales Agent svc 2662 ws 2304.');
+  lines.push('Run against Rahul\'s hiring agent (extractor → scorer → distillation). Isolated from production via the `stream-2fcefa72` replay stream on Hiring Agent svc 2666 ws 2310.');
   lines.push('');
 
   for (const r of results) {

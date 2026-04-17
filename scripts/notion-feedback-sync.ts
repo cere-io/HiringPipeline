@@ -16,9 +16,9 @@
  *   CEF_AUTH_TOKEN        - ROB/orchestrator bearer token
  *
  * Defaults (override via env):
- *   SALES_SERVICE_PUBKEY  - 0xbea7...1fb9 (Sales Agent svc 2662)
- *   REPLAY_STREAM_ID      - stream-a9effdd3 (replay-harness-replay)
- *   CANDIDATES_DB_ID      - 24cd800083d6804daaf7f5b100d71ea9 (Job Roles)
+ *   HIRING_SERVICE_PUBKEY - 0x377f...4a6c (Hiring Agent svc 2666)
+ *   REPLAY_STREAM_ID      - stream-2fcefa72 (candidates-replay)
+ *   CANDIDATES_DB_ID      - bc66a818-be72-4ce3-b205-01f35df214c8 (Candidate Board - Full Pipeline)
  *   STATE_FILE            - drafts/notion-feedback-state.json
  */
 
@@ -28,9 +28,9 @@ import * as path from 'path';
 const NOTION_API = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
-const CANDIDATES_DB_ID = process.env.CANDIDATES_DB_ID || '24cd800083d6804daaf7f5b100d71ea9';
-const SALES_SERVICE_PUBKEY = process.env.SALES_SERVICE_PUBKEY || '0xbea72ad78ea49c404673e1171a59141bb6e3556f8fb0d4d5279535a75afe1fb9';
-const REPLAY_STREAM_ID = process.env.REPLAY_STREAM_ID || 'stream-a9effdd3';
+const CANDIDATES_DB_ID = process.env.CANDIDATES_DB_ID || 'bc66a818-be72-4ce3-b205-01f35df214c8';
+const HIRING_SERVICE_PUBKEY = process.env.HIRING_SERVICE_PUBKEY || '0x377faeeeb34ddb18a86211efeb9364bc9bf93849a6bb20c969b8953976964a6c';
+const REPLAY_STREAM_ID = process.env.REPLAY_STREAM_ID || 'stream-2fcefa72';
 const STATE_FILE = process.env.STATE_FILE || path.join(__dirname, '..', 'drafts', 'notion-feedback-state.json');
 const ORCH_URL = process.env.CEF_ORCHESTRATOR_URL || 'https://orchestrator.compute.test.ddcdragon.com';
 
@@ -93,7 +93,7 @@ async function emitReplayFeedback(candidateId: string, humanScore: number, name:
       emitted_at: new Date().toISOString(),
     },
   };
-  const url = `${ORCH_URL}/api/v1/agent-services/${SALES_SERVICE_PUBKEY}/streams/${REPLAY_STREAM_ID}/events`;
+  const url = `${ORCH_URL}/api/v1/agent-services/${HIRING_SERVICE_PUBKEY}/streams/${REPLAY_STREAM_ID}/events`;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
