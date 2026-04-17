@@ -1,7 +1,9 @@
-import { Event, Context, TraitWeights, CandidateTraits, SourcingStats } from '../types';
+import { Event, Context, TraitWeights, CandidateTraits, SourcingStats, AccountTraits, SalesTraitWeights, PipelineMode, DEFAULT_SALES_WEIGHTS } from '../types';
 
 export async function handle(event: Event, context: Context) {
-    return distill(event.payload, context);
+    const mode: PipelineMode = event.payload?.mode ?? 'recruiting';
+    if (mode === 'recruiting') return distill(event.payload, context);
+    return distillSales(event.payload, context);
 }
 
 const WEIGHT_KEYS: (keyof TraitWeights)[] = [
@@ -91,8 +93,9 @@ function updateSourcingStats(
 }
 
 export async function distill(payload: any, context: Context) {
-    const { candidateId, role, outcome } = payload;
+    const { candidateId, role, outcome, mode } = payload;
 
+    if (mode && mode !== 'recruiting') return distillSales(payload, context);
     if (!candidateId || !role || outcome === undefined) {
         return { success: false, error: 'Missing candidateId, role, or outcome' };
     }
@@ -183,4 +186,55 @@ Candidate trait ratings:
     context.log('New Weights:', JSON.stringify(newWeights));
 
     return { success: true, new_weights: newWeights };
+}
+
+/** Sales-mode distillation. Deterministic formula, no LLM. Same bounded-shift compound-learning
+ *  semantics as the recruiting path: max 0.05 shift per weight per feedback event. */
+const SALES_WEIGHT_KEYS: (keyof SalesTraitWeights)[] = [
+    'icp_fit','intent_signals','deal_size_potential','champion_strength','timing',
+    'decision_velocity','competitive_displacement','relationship_warmth','risk_signals',
+];
+
+function toAccountSignals(t: AccountTraits): Record<keyof SalesTraitWeights, number> {
+    const arrRating = Math.min(Math.log10(Math.max(t.deal_size_potential, 1000)) / 6, 1) * 10;
+    return {
+        icp_fit: t.icp_fit.rating, intent_signals: t.intent_signals.rating,
+        deal_size_potential: arrRating, champion_strength: t.champion_signals.rating,
+        timing: t.timing_signals.rating, decision_velocity: 5,
+        competitive_displacement: t.competitive_signals.rating,
+        relationship_warmth: t.relationship_warmth.rating, risk_signals: t.risk_signals.rating,
+    };
+}
+
+export async function distillSales(payload: any, context: Context) {
+    const { candidateId, role, outcome, mode } = payload;
+    const accountId = candidateId;
+    const segment = role || 'sales';
+    if (!accountId || outcome === undefined) return { success: false, error: 'Missing accountId or outcome' };
+
+    context.log('Distilling sales outcome:', accountId, 'outcome:', outcome, 'mode:', mode);
+    const traitsCubby = context.cubby('hiring-traits');
+    const metaCubby   = context.cubby('hiring-meta');
+    const outcomesCubby = context.cubby('hiring-outcomes');
+    outcomesCubby.json.set(`/${accountId}`, { outcome, timestamp: new Date().toISOString() });
+
+    const traits: AccountTraits = traitsCubby.json.get(`/${accountId}`);
+    if (!traits) return { success: false, error: 'Account traits not found — run pipeline first' };
+    traitsCubby.json.set(`/${accountId}`, { ...traits, human_feedback_score: outcome });
+
+    const current: SalesTraitWeights = metaCubby.json.get(`/sales_weights/${segment}`) ?? { ...DEFAULT_SALES_WEIGHTS };
+    const signals = toAccountSignals(traits);
+    const maxShift = 0.05;
+    const direction = (outcome - 5) / 5;
+    const updated = { ...current };
+    const shifts: Partial<SalesTraitWeights> = {};
+    for (const k of SALES_WEIGHT_KEYS) {
+        const ratingSignal = k === 'risk_signals' ? (5 - signals[k]) / 5 : (signals[k] - 5) / 5;
+        const delta = Math.max(-maxShift, Math.min(maxShift, direction * ratingSignal * maxShift));
+        (updated[k] as number) = parseFloat((((current[k] as number) ?? 0) + delta).toFixed(6));
+        (shifts as any)[k] = parseFloat(delta.toFixed(6));
+    }
+    metaCubby.json.set(`/sales_weights/${segment}`, updated);
+    context.log('Sales weights updated for segment:', segment, 'shifts:', JSON.stringify(shifts));
+    return { success: true, new_weights: updated, shifts };
 }
