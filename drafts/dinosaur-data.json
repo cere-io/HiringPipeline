@@ -1,0 +1,910 @@
+[
+  {
+    "id": "cand-alexandros",
+    "mode": "recruiting",
+    "role": "Senior Protocol Engineer",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-alexandros-baseline",
+          "skills": [
+            "typescript",
+            "react",
+            "node",
+            "rust",
+            "aws",
+            "kubernetes",
+            "postgres"
+          ],
+          "years_of_experience": 8,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 7
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.408Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 48.33,
+          "protocol_engineer_priors": 47.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-alexandros-depth-over-breadth",
+          "skills": [
+            "typescript",
+            "react",
+            "node"
+          ],
+          "years_of_experience": 10,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.408Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 45.17,
+          "protocol_engineer_priors": 48.67
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 8,
+      "weight_set_before": "protocol_engineer_priors",
+      "weight_shifts": {
+        "skills": 0.012,
+        "years_of_experience": 0.002,
+        "company_stages": 0,
+        "education_level": 0.006,
+        "schools": 0,
+        "hard_things_done": 0.012,
+        "hackathons": -0.03,
+        "open_source_contributions": -0.03,
+        "company_signals": 0.006
+      },
+      "weights_after": {
+        "skills": 0.112,
+        "years_of_experience": 0.102,
+        "company_stages": 0.05,
+        "education_level": 0.056,
+        "schools": 0.05,
+        "hard_things_done": 0.362,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.17,
+        "company_signals": 0.056
+      }
+    }
+  },
+  {
+    "id": "cand-benhur",
+    "mode": "recruiting",
+    "role": "Senior Protocol Engineer",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-benhur-baseline",
+          "skills": [
+            "react",
+            "python",
+            "rust",
+            "go",
+            "kafka",
+            "aws",
+            "substrate"
+          ],
+          "years_of_experience": 12,
+          "company_stages": [
+            "series_c",
+            "public"
+          ],
+          "education_level": "Masters",
+          "schools": {
+            "items": [],
+            "rating": 8
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 7
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 5
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.408Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 61,
+          "protocol_engineer_priors": 63
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-benhur-depth-over-breadth",
+          "skills": [
+            "react",
+            "python",
+            "rust"
+          ],
+          "years_of_experience": 14,
+          "company_stages": [
+            "series_c",
+            "public"
+          ],
+          "education_level": "Masters",
+          "schools": {
+            "items": [],
+            "rating": 8
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 5
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 57.83,
+          "protocol_engineer_priors": 63.83
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 8,
+      "weight_set_before": "protocol_engineer_priors",
+      "weight_shifts": {
+        "skills": 0.012,
+        "years_of_experience": 0.018,
+        "company_stages": 0,
+        "education_level": 0.018,
+        "schools": 0.018,
+        "hard_things_done": 0.012,
+        "hackathons": -0.03,
+        "open_source_contributions": 0,
+        "company_signals": 0.006
+      },
+      "weights_after": {
+        "skills": 0.112,
+        "years_of_experience": 0.118,
+        "company_stages": 0.05,
+        "education_level": 0.068,
+        "schools": 0.068,
+        "hard_things_done": 0.362,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.2,
+        "company_signals": 0.056
+      }
+    }
+  },
+  {
+    "id": "cand-bhavin",
+    "mode": "recruiting",
+    "role": "Senior Protocol Engineer",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-bhavin-baseline",
+          "skills": [
+            "python",
+            "rust",
+            "aws",
+            "c++",
+            "terraform"
+          ],
+          "years_of_experience": 14,
+          "company_stages": [],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 2
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 32.83,
+          "protocol_engineer_priors": 27.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-bhavin-depth-over-breadth",
+          "skills": [
+            "python",
+            "rust",
+            "aws"
+          ],
+          "years_of_experience": 16,
+          "company_stages": [],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 3
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 32,
+          "protocol_engineer_priors": 30
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 8,
+      "weight_set_before": "protocol_engineer_priors",
+      "weight_shifts": {
+        "skills": 0,
+        "years_of_experience": 0.026,
+        "company_stages": -0.03,
+        "education_level": 0.006,
+        "schools": 0,
+        "hard_things_done": -0.018,
+        "hackathons": -0.03,
+        "open_source_contributions": -0.03,
+        "company_signals": -0.018
+      },
+      "weights_after": {
+        "skills": 0.1,
+        "years_of_experience": 0.126,
+        "company_stages": 0.02,
+        "education_level": 0.056,
+        "schools": 0.05,
+        "hard_things_done": 0.332,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.17,
+        "company_signals": 0.032
+      }
+    }
+  },
+  {
+    "id": "cand-benjamin",
+    "mode": "recruiting",
+    "role": "Senior Protocol Engineer",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-benjamin-baseline",
+          "skills": [
+            "react",
+            "node",
+            "rust",
+            "substrate"
+          ],
+          "years_of_experience": 5,
+          "company_stages": [],
+          "education_level": "None",
+          "schools": {
+            "items": [],
+            "rating": 2
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 2
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 19.33,
+          "protocol_engineer_priors": 17.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-benjamin-depth-over-breadth",
+          "skills": [
+            "react",
+            "node",
+            "rust"
+          ],
+          "years_of_experience": 7,
+          "company_stages": [],
+          "education_level": "None",
+          "schools": {
+            "items": [],
+            "rating": 2
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 3
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 20.67,
+          "protocol_engineer_priors": 21.67
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 8,
+      "weight_set_before": "protocol_engineer_priors",
+      "weight_shifts": {
+        "skills": -0.006,
+        "years_of_experience": -0.01,
+        "company_stages": -0.03,
+        "education_level": -0.012,
+        "schools": -0.018,
+        "hard_things_done": -0.018,
+        "hackathons": -0.03,
+        "open_source_contributions": -0.03,
+        "company_signals": -0.018
+      },
+      "weights_after": {
+        "skills": 0.094,
+        "years_of_experience": 0.09,
+        "company_stages": 0.02,
+        "education_level": 0.038,
+        "schools": 0.032,
+        "hard_things_done": 0.332,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.17,
+        "company_signals": 0.032
+      }
+    }
+  },
+  {
+    "id": "acc-northwind",
+    "mode": "sales:enterprise",
+    "role": "sales:enterprise",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "account_id": "acc-northwind-baseline",
+          "mode": "sales:enterprise",
+          "company_name": "Northwind Systems",
+          "icp_fit": {
+            "items": [],
+            "rating": 8
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "deal_size_potential": 2000000,
+          "champion_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 7
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": false,
+            "has_linkedin": true,
+            "has_intent_data": true
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 80,
+          "enterprise_tilt": 91,
+          "smb_velocity_tilt": 75
+        }
+      },
+      {
+        "variant": "urgency-weighted",
+        "traits": {
+          "account_id": "acc-northwind-urgency-weighted",
+          "mode": "sales:enterprise",
+          "company_name": "Northwind Systems",
+          "icp_fit": {
+            "items": [],
+            "rating": 8
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 10
+          },
+          "deal_size_potential": 2000000,
+          "champion_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 9
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 6
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": false,
+            "has_linkedin": true,
+            "has_intent_data": true
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 86,
+          "enterprise_tilt": 94.5,
+          "smb_velocity_tilt": 83.5
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 7,
+      "weight_set_before": "enterprise_tilt",
+      "weight_shifts": {
+        "icp_fit": 0.012,
+        "intent_signals": 0.012,
+        "deal_size_potential": 0.02,
+        "champion_strength": 0.012,
+        "timing": 0.008,
+        "decision_velocity": 0,
+        "competitive_displacement": 0.004,
+        "relationship_warmth": 0.008,
+        "risk_signals": 0.008
+      },
+      "weights_after": {
+        "icp_fit": 2.512,
+        "intent_signals": 1.512,
+        "deal_size_potential": 2.52,
+        "champion_strength": 1.512,
+        "timing": 1.008,
+        "decision_velocity": 0.5,
+        "competitive_displacement": 1.504,
+        "relationship_warmth": 1.508,
+        "risk_signals": -0.992
+      }
+    }
+  },
+  {
+    "id": "acc-acorn-labs",
+    "mode": "sales:smb",
+    "role": "sales:smb",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "account_id": "acc-acorn-labs-baseline",
+          "mode": "sales:smb",
+          "company_name": "Acorn Labs",
+          "icp_fit": {
+            "items": [],
+            "rating": 5
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "deal_size_potential": 80000,
+          "champion_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 2
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": false,
+            "has_linkedin": false,
+            "has_intent_data": true
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 60.26,
+          "enterprise_tilt": 62.43,
+          "smb_velocity_tilt": 61.09
+        }
+      },
+      {
+        "variant": "urgency-weighted",
+        "traits": {
+          "account_id": "acc-acorn-labs-urgency-weighted",
+          "mode": "sales:smb",
+          "company_name": "Acorn Labs",
+          "icp_fit": {
+            "items": [],
+            "rating": 5
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 10
+          },
+          "deal_size_potential": 80000,
+          "champion_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 9
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 1
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": false,
+            "has_linkedin": false,
+            "has_intent_data": true
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 66.26,
+          "enterprise_tilt": 65.93,
+          "smb_velocity_tilt": 69.59
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 7,
+      "weight_set_before": "smb_velocity_tilt",
+      "weight_shifts": {
+        "icp_fit": 0,
+        "intent_signals": 0.012,
+        "deal_size_potential": 0.012687,
+        "champion_strength": -0.012,
+        "timing": 0.008,
+        "decision_velocity": 0,
+        "competitive_displacement": 0.004,
+        "relationship_warmth": -0.012,
+        "risk_signals": 0.008
+      },
+      "weights_after": {
+        "icp_fit": 1.5,
+        "intent_signals": 2.512,
+        "deal_size_potential": 0.512687,
+        "champion_strength": 0.988,
+        "timing": 2.008,
+        "decision_velocity": 2,
+        "competitive_displacement": 1.004,
+        "relationship_warmth": 0.488,
+        "risk_signals": -0.492
+      }
+    }
+  },
+  {
+    "id": "acc-helix-health",
+    "mode": "sales:enterprise",
+    "role": "sales:enterprise",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "account_id": "acc-helix-health-baseline",
+          "mode": "sales:enterprise",
+          "company_name": "Helix Health",
+          "icp_fit": {
+            "items": [],
+            "rating": 6
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 2
+          },
+          "deal_size_potential": 1600000,
+          "champion_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 7
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": true,
+            "has_linkedin": false,
+            "has_intent_data": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.409Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 64,
+          "enterprise_tilt": 77,
+          "smb_velocity_tilt": 57
+        }
+      },
+      {
+        "variant": "urgency-weighted",
+        "traits": {
+          "account_id": "acc-helix-health-urgency-weighted",
+          "mode": "sales:enterprise",
+          "company_name": "Helix Health",
+          "icp_fit": {
+            "items": [],
+            "rating": 6
+          },
+          "intent_signals": {
+            "items": [],
+            "rating": 4
+          },
+          "deal_size_potential": 1600000,
+          "champion_signals": {
+            "items": [],
+            "rating": 8
+          },
+          "timing_signals": {
+            "items": [],
+            "rating": 9
+          },
+          "competitive_signals": {
+            "items": [],
+            "rating": 6
+          },
+          "relationship_warmth": {
+            "items": [],
+            "rating": 6
+          },
+          "risk_signals": {
+            "items": [],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_crm": true,
+            "has_linkedin": false,
+            "has_intent_data": false
+          },
+          "extracted_at": "2026-04-17T12:52:36.410Z"
+        },
+        "scoreByWeightSet": {
+          "baseline": 70,
+          "enterprise_tilt": 80.5,
+          "smb_velocity_tilt": 65.5
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 7,
+      "weight_set_before": "enterprise_tilt",
+      "weight_shifts": {
+        "icp_fit": 0.004,
+        "intent_signals": -0.012,
+        "deal_size_potential": 0.02,
+        "champion_strength": 0.012,
+        "timing": 0.008,
+        "decision_velocity": 0,
+        "competitive_displacement": 0.004,
+        "relationship_warmth": 0.008,
+        "risk_signals": 0.008
+      },
+      "weights_after": {
+        "icp_fit": 2.504,
+        "intent_signals": 1.488,
+        "deal_size_potential": 2.52,
+        "champion_strength": 1.512,
+        "timing": 1.008,
+        "decision_velocity": 0.5,
+        "competitive_displacement": 1.504,
+        "relationship_warmth": 1.508,
+        "risk_signals": -0.992
+      }
+    }
+  }
+]
