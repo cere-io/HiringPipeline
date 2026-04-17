@@ -3,7 +3,7 @@
  *
  * Polls the Notion Job Roles DB (24cd800083d6804daaf7f5b100d71ea9) plus the candidate pages
  * under it, diffs against a local state file to detect NEW or UPDATED human scorecards, and
- * emits `replay.feedback` events to the Dinosaur replay stream so distillation re-runs
+ * emits `replay.feedback` events to the Replay Harness replay stream so distillation re-runs
  * whenever an interviewer files a score.
  *
  * Addresses Fred's 2026-04-17 follow-up: "wire the interviewer scorecard back into the
@@ -17,7 +17,7 @@
  *
  * Defaults (override via env):
  *   SALES_SERVICE_PUBKEY  - 0xbea7...1fb9 (Sales Agent svc 2662)
- *   REPLAY_STREAM_ID      - stream-a9effdd3 (dinosaur-replay)
+ *   REPLAY_STREAM_ID      - stream-a9effdd3 (replay-harness-replay)
  *   CANDIDATES_DB_ID      - 24cd800083d6804daaf7f5b100d71ea9 (Job Roles)
  *   STATE_FILE            - drafts/notion-feedback-state.json
  */

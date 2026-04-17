@@ -1,5 +1,5 @@
 /**
- * Dinosaur replay harness.
+ * Replay Harness replay harness.
  *
  * Fred's ask (2026-04-17): "set up a test workspace/stream to replay new candidates
  * and Notion updates through the agent repeatedly to restructure, reindex, and extract
@@ -14,8 +14,8 @@
  *                       show weight SHIFT.
  *   3) Repeats in two MODES: recruiting (existing) and sales (new).
  *   4) Emits:
- *        - drafts/dinosaur-report.md   (human-readable diff table)
- *        - drafts/dinosaur-data.json   (machine-readable)
+ *        - drafts/replay-harness-report.md   (human-readable diff table)
+ *        - drafts/replay-harness-data.json   (machine-readable)
  *
  * Safe by design: uses an in-memory MockCubby (same pattern as scripts/test-pipeline.ts)
  * so nothing touches prod hiring-* cubbies. Every trait extraction and distillation step
@@ -63,18 +63,18 @@ function makeContext(): Context {
     'hiring-interviews': new MockCubby(),
   };
   return {
-    log: (...args: any[]) => { if (process.env.DINOSAUR_VERBOSE) console.log('[log]', ...args); },
+    log: (...args: any[]) => { if (process.env.REPLAY_VERBOSE) console.log('[log]', ...args); },
     emit: () => {},
     fetch: async (url: string, opts: any) => {
       // Translate OpenAI-compat Gemini calls to Claude (Anthropic). The shared Gemini API key
       // is exhausted today; Claude demonstrates Fred's model-swappable principle and keeps the
-      // agent code untouched. Set DINOSAUR_PROVIDER=gemini to switch back later.
+      // agent code untouched. Set REPLAY_PROVIDER=gemini to switch back later.
       if (url.includes('generativelanguage.googleapis.com') && url.includes('/openai/chat/completions')) {
         const body = JSON.parse(opts.body);
-        const provider = process.env.DINOSAUR_PROVIDER || 'anthropic';
+        const provider = process.env.REPLAY_PROVIDER || 'anthropic';
 
         if (provider === 'anthropic') {
-          const model = process.env.DINOSAUR_MODEL || 'claude-haiku-4-5';
+          const model = process.env.REPLAY_MODEL || 'claude-haiku-4-5';
           const sys = (body.messages || []).filter((m: any) => m.role === 'system').map((m: any) => m.content).join('\n\n');
           const userMsgs = (body.messages || []).filter((m: any) => m.role !== 'system').map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
           const anthBody: any = {
@@ -108,8 +108,8 @@ function makeContext(): Context {
           return { ok: false, status: 429, data: { error: 'retry budget exhausted' } };
         }
 
-        // Fallback: native Gemini (kept for swap-back via DINOSAUR_PROVIDER=gemini)
-        const model = process.env.DINOSAUR_MODEL || 'gemini-2.5-flash-lite';
+        // Fallback: native Gemini (kept for swap-back via REPLAY_PROVIDER=gemini)
+        const model = process.env.REPLAY_MODEL || 'gemini-2.5-flash-lite';
         const sys = (body.messages || []).filter((m: any) => m.role === 'system').map((m: any) => m.content).join('\n\n');
         const userText = (body.messages || []).filter((m: any) => m.role !== 'system').map((m: any) => m.content).join('\n\n');
         const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -435,7 +435,7 @@ function extractSalesOffline(fx: { candidateId: string; resumeText: string; role
   };
 }
 
-const USE_OFFLINE = process.env.DINOSAUR_OFFLINE !== '0'; // default offline; set DINOSAUR_OFFLINE=0 to use LLM path
+const USE_OFFLINE = process.env.REPLAY_OFFLINE !== '0'; // default offline; set REPLAY_OFFLINE=0 to use LLM path
 
 async function runRecruitingFixture(fx: typeof RECRUITING_FIXTURES[number]): Promise<FixtureResult> {
   const ctx = makeContext();
@@ -534,7 +534,7 @@ function formatSalesTraits(t: AccountTraits): string {
 
 function renderReport(results: FixtureResult[]): string {
   const lines: string[] = [];
-  lines.push('# Dinosaur Replay Report');
+  lines.push('# Replay Harness Replay Report');
   lines.push('');
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push(`Fixtures: ${RECRUITING_FIXTURES.length} recruiting + ${SALES_FIXTURES.length} sales = ${RECRUITING_FIXTURES.length + SALES_FIXTURES.length} total`);
@@ -614,15 +614,15 @@ function renderReport(results: FixtureResult[]): string {
 
 async function main() {
   if (USE_OFFLINE) {
-    console.log('Mode: OFFLINE (deterministic rule-based extractor). Set DINOSAUR_OFFLINE=0 to use live LLM.');
+    console.log('Mode: OFFLINE (deterministic rule-based extractor). Set REPLAY_OFFLINE=0 to use live LLM.');
   } else {
-    const provider = process.env.DINOSAUR_PROVIDER || 'anthropic';
+    const provider = process.env.REPLAY_PROVIDER || 'anthropic';
     if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY required.'); process.exit(2); }
     if (provider !== 'anthropic' && !process.env.GEMINI_API_KEY) { console.error('GEMINI_API_KEY required.'); process.exit(2); }
-    console.log('Mode: LLM live | Provider:', provider, '| Model:', process.env.DINOSAUR_MODEL || (provider === 'anthropic' ? 'claude-haiku-4-5' : 'gemini-2.5-flash-lite'));
+    console.log('Mode: LLM live | Provider:', provider, '| Model:', process.env.REPLAY_MODEL || (provider === 'anthropic' ? 'claude-haiku-4-5' : 'gemini-2.5-flash-lite'));
   }
 
-  console.log('Running Dinosaur replay across', RECRUITING_FIXTURES.length + SALES_FIXTURES.length, 'fixtures...');
+  console.log('Running Replay Harness replay across', RECRUITING_FIXTURES.length + SALES_FIXTURES.length, 'fixtures...');
   console.log('Recruiting:', RECRUITING_FIXTURES.map(f => f.candidateId).join(', '));
   console.log('Sales:     ', SALES_FIXTURES.map(f => f.candidateId).join(', '));
 
@@ -642,8 +642,8 @@ async function main() {
   const draftsDir = path.resolve(__dirname, '../drafts');
   if (!fs.existsSync(draftsDir)) fs.mkdirSync(draftsDir, { recursive: true });
 
-  const reportPath = path.join(draftsDir, 'dinosaur-report.md');
-  const dataPath = path.join(draftsDir, 'dinosaur-data.json');
+  const reportPath = path.join(draftsDir, 'replay-harness-report.md');
+  const dataPath = path.join(draftsDir, 'replay-harness-data.json');
   fs.writeFileSync(reportPath, renderReport(results));
   fs.writeFileSync(dataPath, JSON.stringify(results, null, 2));
 

@@ -1,6 +1,6 @@
-# Dinosaur Replay Report
+# Replay Harness Replay Report
 
-Generated: 2026-04-17T13:01:16.915Z
+Generated: 2026-04-17T13:15:56.082Z
 Fixtures: 4 recruiting + 3 sales = 7 total
 
 ## Three Fred operations, proven
