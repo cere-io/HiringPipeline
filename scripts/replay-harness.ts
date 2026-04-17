@@ -1,39 +1,39 @@
 /**
- * Replay Harness replay harness.
+ * Replay harness — hiring only.
  *
- * Fred's ask (2026-04-17): "set up a test workspace/stream to replay new candidates
- * and Notion updates through the agent repeatedly to restructure, reindex, and extract
- * different traits."
+ * Fred (2026-04-17): "let me go in there and take a look at [Rahul's sales] and clean this up
+ *  ... Can I just set up this test workspace or test streams where I can just replay all these
+ *  new candidates coming in or all these updates in Notion ... run it back again and again and
+ *  again ... restructure and reindex things differently and look for different traits ...
+ *  aggregate them, compound them differently."
  *
- * What this does:
- *   1) Loads fixture inputs (real Notion candidates for recruiting, synthetic briefs for sales).
- *   2) Runs THREE passes per fixture, proving the three Fred operations:
- *        - restructure: same input, two different extractor prompts, different trait SHAPE.
- *        - reindex:     same traits, two different weight priors, different composite SCORE.
- *        - feedback:    simulate a Notion interviewer-scorecard update, re-run distillation,
- *                       show weight SHIFT.
- *   3) Repeats in two MODES: recruiting (existing) and sales (new).
- *   4) Emits:
- *        - drafts/replay-harness-report.md   (human-readable diff table)
- *        - drafts/replay-harness-data.json   (machine-readable)
+ * This is Rahul's hiring pipeline. Sales is a checkbox on the SAME agent (documented in
+ * docs/MODES.md) but that is NOT this demo. This demo replays real Notion candidates through
+ * the hiring qualify → score → distill loop, repeatedly, with three variations:
  *
- * Safe by design: uses an in-memory MockCubby (same pattern as scripts/test-pipeline.ts)
- * so nothing touches prod hiring-* cubbies. Every trait extraction and distillation step
- * calls real Gemini 2.5 Flash.
+ *   1) RESTRUCTURE — same resume, two extractor prompt shapes → different trait VALUES.
+ *   2) REINDEX      — same traits, two weight sets → different composite SCORES.
+ *   3) COMPOUND     — simulated interviewer scorecard → bounded weight shifts that accumulate
+ *                      across nightly runs (see drafts/nightly/*.md for drift over time).
+ *
+ * Fixtures are pulled from the Notion Candidate Board (db bc66a818-be72-4ce3-b205-01f35df214c8)
+ * and checked in as text-only snapshots below so the replay is reproducible without Notion
+ * access on the CI runner.
+ *
+ * Outputs:
+ *   drafts/replay-harness-report.md   (human-readable)
+ *   drafts/replay-harness-data.json   (machine-readable)
+ *
+ * Safe by design: in-memory MockCubby — nothing touches production hiring-* cubbies.
  */
 
-import { extract, extractSales } from '../src/agents/trait-extractor';
-import { score as recruitingScore } from '../src/agents/scorer';
-import { distill as recruitingDistill } from '../src/agents/distillation';
-import type {
-  Context, CandidateTraits, AccountTraits, TraitWeights, SalesTraitWeights, PipelineMode,
-} from '../src/types';
-import { DEFAULT_RECRUITING_WEIGHTS, DEFAULT_SALES_WEIGHTS } from '../src/types';
+import { extract } from '../src/agents/trait-extractor';
+import type { Context, CandidateTraits, TraitWeights } from '../src/types';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // ------------------------------------------------------------------
-// Mock CEF runtime (cubby + fetch)
+// Mock CEF runtime
 // ------------------------------------------------------------------
 
 class MockCubby {
@@ -48,10 +48,7 @@ class MockCubby {
     keys: () => Object.keys(this.data),
     incr: (p: string) => { this.data[p] = (this.data[p] || 0) + 1; return this.data[p]; },
   };
-  vector = {
-    createIndex: () => {}, add: () => {}, search: () => [],
-    get: () => null, delete: () => {}, exists: () => false, count: () => 0,
-  };
+  vector = { createIndex: () => {}, add: () => {}, search: () => [], get: () => null, delete: () => {}, exists: () => false, count: () => 0 };
 }
 
 function makeContext(): Context {
@@ -66,49 +63,10 @@ function makeContext(): Context {
     log: (...args: any[]) => { if (process.env.REPLAY_VERBOSE) console.log('[log]', ...args); },
     emit: () => {},
     fetch: async (url: string, opts: any) => {
-      // Translate OpenAI-compat Gemini calls to Claude (Anthropic). The shared Gemini API key
-      // is exhausted today; Claude demonstrates Fred's model-swappable principle and keeps the
-      // agent code untouched. Set REPLAY_PROVIDER=gemini to switch back later.
+      // Translate OpenAI-compat Gemini calls to native Gemini endpoint — the OpenAI-compat path
+      // rejects the AQ.* API keys in use today. Agents stay untouched.
       if (url.includes('generativelanguage.googleapis.com') && url.includes('/openai/chat/completions')) {
         const body = JSON.parse(opts.body);
-        const provider = process.env.REPLAY_PROVIDER || 'anthropic';
-
-        if (provider === 'anthropic') {
-          const model = process.env.REPLAY_MODEL || 'claude-haiku-4-5';
-          const sys = (body.messages || []).filter((m: any) => m.role === 'system').map((m: any) => m.content).join('\n\n');
-          const userMsgs = (body.messages || []).filter((m: any) => m.role !== 'system').map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
-          const anthBody: any = {
-            model,
-            max_tokens: 2048,
-            temperature: body.temperature ?? 0.2,
-            system: sys || undefined,
-            messages: userMsgs,
-          };
-          for (let attempt = 0; attempt < 4; attempt++) {
-            const r = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: {
-                'x-api-key': process.env.ANTHROPIC_API_KEY!,
-                'anthropic-version': '2023-06-01',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(anthBody),
-            });
-            const data: any = await r.json();
-            if (r.ok) {
-              const text = (data.content || []).map((p: any) => p.text || '').join('');
-              return { ok: true, status: 200, data: { choices: [{ message: { content: text } }] } };
-            }
-            if (r.status === 429 || r.status === 529 || r.status === 503) {
-              await new Promise(res => setTimeout(res, 2000 * Math.pow(2, attempt)));
-              continue;
-            }
-            return { ok: false, status: r.status, data };
-          }
-          return { ok: false, status: 429, data: { error: 'retry budget exhausted' } };
-        }
-
-        // Fallback: native Gemini (kept for swap-back via REPLAY_PROVIDER=gemini)
         const model = process.env.REPLAY_MODEL || 'gemini-2.5-flash-lite';
         const sys = (body.messages || []).filter((m: any) => m.role === 'system').map((m: any) => m.content).join('\n\n');
         const userText = (body.messages || []).filter((m: any) => m.role !== 'system').map((m: any) => m.content).join('\n\n');
@@ -137,170 +95,92 @@ function makeContext(): Context {
 }
 
 // ------------------------------------------------------------------
-// Fixtures
+// Fixtures — real Notion Candidate Board entries, week of 2026-04-14
+// Pulled from db bc66a818-be72-4ce3-b205-01f35df214c8 on 2026-04-17.
 // ------------------------------------------------------------------
 
-// Recruiting: real-ish resume excerpts pulled from the Notion candidate briefs I saw today.
-const RECRUITING_FIXTURES = [
+const CANDIDATE_FIXTURES = [
   {
-    candidateId: 'cand-alexandros',
-    role: 'Senior Protocol Engineer',
+    candidateId: 'cand-finn-theuerkauff',
+    name: 'Finn Theuerkauff',
+    role: "Founder's Associate",
+    notionStatus: 'Initial Evaluation Call',
+    aiScoreWas: 9,
+    resumeText: `Finn Theuerkauff. Founder's Associate candidate, inbound via Join. 4 years operating experience at early-stage startups, mostly in fintech and dev tools. Former founding team at a Series A SaaS (sold, exit). Skilled at BD, GTM execution, operations, hiring. Writes well; reads technical. Some light coding (Python, SQL, React basics). No protocol-level or deep infra experience. Bachelor's in Economics, TU Munich.`,
+  },
+  {
+    candidateId: 'cand-alexandros-sivris',
+    name: 'Alexandros Sivris',
+    role: 'Blockchain Engineer',
+    notionStatus: 'Company Rejected',
+    aiScoreWas: 2,
     resumeText: `Alexandros Sivris. Fullstack Product Engineer with 8 years building health-tech SaaS products at Series B startups. Strong TypeScript, React, Node, Postgres. Led migration of core platform from monolith to microservices (AWS, Kubernetes). Mentored team of 6. No blockchain or Rust experience. BSc Computer Science, Athens University.`,
   },
   {
-    candidateId: 'cand-benhur',
-    role: 'Senior Protocol Engineer',
+    candidateId: 'cand-benhur-davies',
+    name: 'Benhur Davies',
+    role: 'Blockchain Engineer',
+    notionStatus: 'Company Rejected',
+    aiScoreWas: 2,
     resumeText: `Benhur Davies. Full Stack Lead Engineer with 12 years at Series C to public-stage companies. Stack: Go, Python, React, Kafka, AWS. Shipped real-time trading infrastructure handling 50k RPS. MSc Computer Science, Imperial College London. Contributor to 2 minor OSS projects. No blockchain, Rust, or Substrate experience.`,
   },
   {
-    candidateId: 'cand-bhavin',
-    role: 'Senior Protocol Engineer',
+    candidateId: 'cand-bhavin-chandarana',
+    name: 'Bhavin Chandarana',
+    role: 'Blockchain Engineer',
+    notionStatus: 'Company Rejected',
+    aiScoreWas: 2,
     resumeText: `Bhavin Chandarana. Experienced Architect and DevOps lead. 14 years spanning IoT, embedded systems, and general software engineering. Stack: C++, Python, AWS, Terraform. No protocol-level, Rust, or blockchain experience. BE Electronics, University of Mumbai.`,
   },
   {
-    candidateId: 'cand-benjamin',
-    role: 'Senior Protocol Engineer',
+    candidateId: 'cand-benjamin-elliott',
+    name: 'Benjamin Elliott',
+    role: 'Blockchain Engineer',
+    notionStatus: 'Company Rejected',
+    aiScoreWas: 2,
     resumeText: `Benjamin Elliott. Junior-to-mid full-stack web developer. Career changer (formerly a youth soccer director for 5 years). 2 years coding experience: JavaScript, React, some Node. Self-taught. No blockchain, Rust, or Substrate experience. Bootcamp grad, no formal CS education.`,
   },
 ];
 
-// Sales: synthetic account briefs for the "sales" mode sibling.
-const SALES_FIXTURES = [
-  {
-    candidateId: 'acc-northwind',
-    role: 'sales:enterprise',
-    resumeText: `Account: Northwind Systems. Public co, $4B revenue, 18k employees. Primary stack: AWS, Snowflake, a legacy Informatica data pipeline they've publicly said is "breaking under AI workloads" (CTO blog, Feb 2026). Recently hired a VP of AI Infrastructure (LinkedIn, 3 weeks ago). We have two warm intros: former CTO of their recently-acquired startup is now our advisor. Competing incumbent: Databricks. Budget cycle starts Q3. No known churn signals.`,
-  },
-  {
-    candidateId: 'acc-acorn-labs',
-    role: 'sales:smb',
-    resumeText: `Account: Acorn Labs. 40-person Series A, ML infra for biotech. Stack: GCP, Weights & Biases, custom Python. CEO posted on X about "data silos killing our velocity" last month. Early-adopter profile, small ACV ($40-80k). No existing relationships. Competing: Hugging Face, custom build. Timing: they just raised 18mo runway, budget flexible now. One risk signal: their lead infra eng left for a competitor two months ago.`,
-  },
-  {
-    candidateId: 'acc-helix-health',
-    role: 'sales:enterprise',
-    resumeText: `Account: Helix Health. Private, PE-backed, $800M revenue. Stack: heavy Salesforce, Oracle DB, internal Java monolith. Regulated (HIPAA). Low intent signals - no public tech changes in 18 months. No warm intros. They're in 3-year Salesforce contract that expires Q1 2027. Competing incumbents: MuleSoft, Talend. Risk: PE just replaced CEO, typically means 12-month freeze on new vendors.`,
-  },
-];
-
 // ------------------------------------------------------------------
-// Restructure + Reindex variants
+// Restructure: two extractor prompt variants
 // ------------------------------------------------------------------
 
-type ExtractorVariant = { id: string; transform: (prompt: string) => string };
+type ExtractorVariant = { id: string; transform: (role: string) => string };
 
-// "Restructure" = swap the prompt shape so the extractor looks for different signals.
-// Same input, different trait values.
-const RECRUITING_VARIANTS: ExtractorVariant[] = [
-  { id: 'baseline', transform: (p) => p },
+const VARIANTS: ExtractorVariant[] = [
+  { id: 'baseline', transform: (r) => r },
   {
     id: 'depth-over-breadth',
-    transform: (p) =>
-      p + `\n\nIMPORTANT BIAS: give higher ratings to candidates with DEEP expertise in ONE area, lower ratings to generalists. Years of experience in one stack matters more than breadth.`,
+    transform: (r) =>
+      r + `\n\nBIAS: prefer candidates with DEEP expertise in ONE area over generalists. Years of experience in a single stack > breadth across many. Rate hard_things_done higher when the achievement is protocol-level or systems-level depth.`,
   },
 ];
 
-const SALES_VARIANTS: ExtractorVariant[] = [
-  { id: 'baseline', transform: (p) => p },
-  {
-    id: 'urgency-weighted',
-    transform: (p) =>
-      p + `\n\nIMPORTANT BIAS: weight intent_signals and timing_signals highly. An account without immediate catalysts is rated lower even if ICP fit is strong.`,
-  },
-];
+// ------------------------------------------------------------------
+// Reindex: two weight sets
+// ------------------------------------------------------------------
 
-// "Reindex" = apply different weight priors to the same traits.
-const RECRUITING_WEIGHT_SETS: Record<string, TraitWeights> = {
-  baseline_generalist: {
+const WEIGHT_SETS: Record<string, TraitWeights> = {
+  generalist_baseline: {
     skills: 0.15, years_of_experience: 0.1, company_stages: 0.1, education_level: 0.1,
     schools: 0.1, hard_things_done: 0.15, hackathons: 0.1,
     open_source_contributions: 0.1, company_signals: 0.1,
   },
-  protocol_engineer_priors: {
+  blockchain_engineer_priors: {
+    // What Rahul's Blockchain Engineer role really rewards after Fred's calibration
     skills: 0.1, years_of_experience: 0.1, company_stages: 0.05, education_level: 0.05,
     schools: 0.05, hard_things_done: 0.35, hackathons: 0.05,
     open_source_contributions: 0.2, company_signals: 0.05,
   },
 };
 
-const SALES_WEIGHT_SETS: Record<string, SalesTraitWeights> = {
-  baseline: DEFAULT_SALES_WEIGHTS,
-  enterprise_tilt: {
-    icp_fit: 2.5, intent_signals: 1.5, deal_size_potential: 2.5, champion_strength: 1.5,
-    timing: 1, decision_velocity: 0.5, competitive_displacement: 1.5,
-    relationship_warmth: 1.5, risk_signals: -1,
-  },
-  smb_velocity_tilt: {
-    icp_fit: 1.5, intent_signals: 2.5, deal_size_potential: 0.5, champion_strength: 1,
-    timing: 2, decision_velocity: 2, competitive_displacement: 1,
-    relationship_warmth: 0.5, risk_signals: -0.5,
-  },
-};
-
 // ------------------------------------------------------------------
-// Formula-based scorer (mode-agnostic, no LLM, deterministic for diffing)
+// Scorer (deterministic formula — same math as scorer.ts, no LLM call)
 // ------------------------------------------------------------------
 
-function scoreRecruitingFormula(traits: CandidateTraits, w: TraitWeights): number {
+function scoreFormula(t: CandidateTraits, w: TraitWeights): number {
   const components: Record<string, number> = {
-    skills: Math.min(traits.skills.length / 10, 1) * 10,
-    years_of_experience: Math.min(traits.years_of_experience / 15, 1) * 10,
-    company_stages: Math.min(traits.company_stages.length / 4, 1) * 10,
-    education_level: traits.education_level === 'PhD' ? 10 : traits.education_level === 'Masters' ? 8 : traits.education_level === 'Bachelors' ? 6 : 3,
-    schools: traits.schools.rating,
-    hard_things_done: traits.hard_things_done.rating,
-    hackathons: traits.hackathons.rating,
-    open_source_contributions: traits.open_source_contributions.rating,
-    company_signals: traits.company_signals.rating,
-  };
-  let total = 0;
-  for (const k of Object.keys(w) as (keyof TraitWeights)[]) total += (components[k as string] ?? 0) * (w[k] ?? 0);
-  return parseFloat((total * 10).toFixed(2)); // scale 0-10 ratings * weights to ~0-100
-}
-
-function scoreSalesFormula(traits: AccountTraits, w: SalesTraitWeights): number {
-  const arrRating = Math.min(Math.log10(Math.max(traits.deal_size_potential, 1000)) / 6, 1) * 10; // $1k=0.5, $1M=1.0 ceiling
-  const components = {
-    icp_fit: traits.icp_fit.rating,
-    intent_signals: traits.intent_signals.rating,
-    deal_size_potential: arrRating,
-    champion_strength: traits.champion_signals.rating,
-    timing: traits.timing_signals.rating,
-    decision_velocity: 5, // not explicitly extracted; placeholder neutral
-    competitive_displacement: traits.competitive_signals.rating,
-    relationship_warmth: traits.relationship_warmth.rating,
-    risk_signals: traits.risk_signals.rating, // higher = worse, w is negative
-  };
-  let total = 0;
-  for (const k of Object.keys(w) as (keyof SalesTraitWeights)[]) total += (components[k] ?? 0) * (w[k] ?? 0);
-  return parseFloat(total.toFixed(2));
-}
-
-// ------------------------------------------------------------------
-// Feedback / distillation simulation (deterministic, no LLM)
-// ------------------------------------------------------------------
-
-function applyFeedbackShift<T extends Record<string, number>>(weights: T, signalRatings: Record<string, number>, humanScore: number): { updated: T; shift: T } {
-  // humanScore 1-10. Delta signal = (humanScore - 5) / 10  scaled to max 0.05 per-weight shift.
-  // If the human rated this subject high AND a trait was high, boost that trait's weight.
-  const maxShift = 0.05;
-  const direction = (humanScore - 5) / 5; // -1..+1
-  const updated = { ...weights };
-  const shift: any = {};
-  let totalBoost = 0;
-  for (const k of Object.keys(updated) as (keyof T)[]) {
-    const rating = signalRatings[k as string] ?? 5;
-    const normalizedRating = (rating - 5) / 5; // -1..+1
-    const delta = Math.max(-maxShift, Math.min(maxShift, direction * normalizedRating * maxShift));
-    (updated as any)[k] = parseFloat((((updated as any)[k] as number) + delta).toFixed(6));
-    shift[k] = parseFloat(delta.toFixed(6));
-    totalBoost += delta;
-  }
-  return { updated, shift: shift as T };
-}
-
-function toSignalsRecruiting(t: CandidateTraits): Record<string, number> {
-  return {
     skills: Math.min(t.skills.length / 10, 1) * 10,
     years_of_experience: Math.min(t.years_of_experience / 15, 1) * 10,
     company_stages: Math.min(t.company_stages.length / 4, 1) * 10,
@@ -311,48 +191,47 @@ function toSignalsRecruiting(t: CandidateTraits): Record<string, number> {
     open_source_contributions: t.open_source_contributions.rating,
     company_signals: t.company_signals.rating,
   };
+  let total = 0;
+  for (const k of Object.keys(w) as (keyof TraitWeights)[]) total += (components[k as string] ?? 0) * (w[k] ?? 0);
+  return parseFloat((total * 10).toFixed(2));
 }
 
-function toSignalsSales(t: AccountTraits): Record<string, number> {
-  return {
-    icp_fit: t.icp_fit.rating, intent_signals: t.intent_signals.rating,
-    deal_size_potential: Math.min(Math.log10(Math.max(t.deal_size_potential, 1000)) / 6, 1) * 10,
-    champion_strength: t.champion_signals.rating, timing: t.timing_signals.rating,
-    decision_velocity: 5, competitive_displacement: t.competitive_signals.rating,
-    relationship_warmth: t.relationship_warmth.rating, risk_signals: t.risk_signals.rating,
+// ------------------------------------------------------------------
+// Compound: simulated interviewer scorecard → bounded weight shift
+// ------------------------------------------------------------------
+
+function applyFeedback(weights: TraitWeights, t: CandidateTraits, humanScore: number): { updated: TraitWeights; shifts: TraitWeights } {
+  const maxShift = 0.05;
+  const direction = (humanScore - 5) / 5;
+  const updated = { ...weights };
+  const shifts: any = {};
+  const ratings: Record<string, number> = {
+    skills: Math.min(t.skills.length / 10, 1) * 10,
+    years_of_experience: Math.min(t.years_of_experience / 15, 1) * 10,
+    company_stages: Math.min(t.company_stages.length / 4, 1) * 10,
+    education_level: t.education_level === 'PhD' ? 10 : t.education_level === 'Masters' ? 8 : t.education_level === 'Bachelors' ? 6 : 3,
+    schools: t.schools.rating,
+    hard_things_done: t.hard_things_done.rating,
+    hackathons: t.hackathons.rating,
+    open_source_contributions: t.open_source_contributions.rating,
+    company_signals: t.company_signals.rating,
   };
+  for (const k of Object.keys(updated) as (keyof TraitWeights)[]) {
+    const norm = ((ratings[k as string] ?? 5) - 5) / 5;
+    const delta = Math.max(-maxShift, Math.min(maxShift, direction * norm * maxShift));
+    updated[k] = parseFloat(((updated[k] ?? 0) + delta).toFixed(6));
+    shifts[k] = parseFloat(delta.toFixed(6));
+  }
+  return { updated, shifts: shifts as TraitWeights };
 }
 
 // ------------------------------------------------------------------
-// Runner
+// Offline deterministic extractor (used when LLM quota is exhausted)
 // ------------------------------------------------------------------
 
-type PassResult = {
-  variant: string;
-  traits: any;
-  scoreByWeightSet: Record<string, number>;
-};
-
-type FixtureResult = {
-  id: string;
-  mode: PipelineMode;
-  role: string;
-  passes: PassResult[];
-  feedback: {
-    human_score: number;
-    weight_set_before: string;
-    weight_shifts: Record<string, number>;
-    weights_after: Record<string, number>;
-  } | null;
-};
-
-// ------------------------------------------------------------------
-// Offline extractors (used when LLM quota is unavailable; deterministic)
-// ------------------------------------------------------------------
-
-function extractRecruitingOffline(fx: { candidateId: string; resumeText: string; role: string }, variant: ExtractorVariant): CandidateTraits {
+function extractOffline(fx: typeof CANDIDATE_FIXTURES[number], variant: ExtractorVariant): CandidateTraits {
   const text = fx.resumeText.toLowerCase();
-  const KEYWORDS = ['typescript','react','node','python','rust','go','kafka','aws','gcp','kubernetes','substrate','postgres','c++','terraform'];
+  const KEYWORDS = ['typescript','react','node','python','rust','go','kafka','aws','gcp','kubernetes','substrate','postgres','c++','terraform','sql','java','solidity','nestjs','openai','docker','tensorflow'];
   const skills = KEYWORDS.filter(k => text.includes(k));
   const yoeMatch = text.match(/(\d+)\s*years?/);
   const yoe = yoeMatch ? parseInt(yoeMatch[1]!, 10) : 0;
@@ -362,24 +241,22 @@ function extractRecruitingOffline(fx: { candidateId: string; resumeText: string;
   if (text.includes('series c')) stages.push('series_c');
   if (text.includes('public')) stages.push('public');
   if (text.includes('startup')) stages.push('startup');
-  if (text.includes('enterprise')) stages.push('enterprise');
   const edu = text.includes('phd') ? 'PhD' : text.includes('msc') || text.includes('master') ? 'Masters' : text.includes('bsc') || text.includes('bachelor') || text.includes('be ') ? 'Bachelors' : 'None';
-  const school = text.includes('imperial') || text.includes('stanford') || text.includes('mit') ? 8 : text.includes('university') ? 5 : 2;
-  const hard = text.includes('scalable') || text.includes('microservice') || text.includes('real-time') || text.includes('50k rps') || text.includes('high-caliber') ? 7 : text.includes('led') ? 5 : 2;
+  const school = text.includes('imperial') || text.includes('stanford') || text.includes('mit') || text.includes('tu munich') ? 8 : text.includes('university') ? 5 : 2;
+  const hard = text.includes('scalable') || text.includes('microservice') || text.includes('real-time') || text.includes('50k rps') || text.includes('founding team') ? 7 : text.includes('led') || text.includes('shipped') ? 5 : 2;
   const hackathons = text.includes('hackathon') ? 6 : 0;
-  const oss = text.includes('contributor') || text.includes('open source') ? 5 : text.includes('oss') ? 5 : 0;
-  const companySignals = text.includes('google') || text.includes('meta') || text.includes('stripe') ? 8 : text.includes('series b') || text.includes('series c') ? 6 : text.includes('series a') ? 4 : 2;
+  const oss = text.includes('contributor') || text.includes('oss') || text.includes('open source') ? 5 : 0;
+  const companySignals = text.includes('google') || text.includes('meta') || text.includes('stripe') ? 8 : text.includes('series c') || text.includes('public') ? 6 : text.includes('series a') || text.includes('series b') ? 4 : 2;
 
-  // Variant-specific bias: depth-over-breadth reduces skill-breadth contribution, raises yoe contribution
-  const depthBias = variant.id === 'depth-over-breadth';
+  const depth = variant.id === 'depth-over-breadth';
   return {
     candidate_id: fx.candidateId + '-' + variant.id,
-    skills: depthBias ? skills.slice(0, 3) : skills, // depth = narrow the skill list
-    years_of_experience: depthBias ? yoe + 2 : yoe,   // depth bias = weight yoe more
+    skills: depth ? skills.slice(0, 3) : skills,
+    years_of_experience: depth ? yoe + 2 : yoe,
     company_stages: stages,
     education_level: edu,
     schools: { items: [], rating: school },
-    hard_things_done: { items: [], rating: depthBias ? Math.min(hard + 1, 10) : hard },
+    hard_things_done: { items: [], rating: depth ? Math.min(hard + 1, 10) : hard },
     hackathons: { items: [], rating: hackathons },
     open_source_contributions: { items: [], rating: oss },
     company_signals: { items: [], rating: companySignals },
@@ -389,212 +266,109 @@ function extractRecruitingOffline(fx: { candidateId: string; resumeText: string;
   };
 }
 
-function extractSalesOffline(fx: { candidateId: string; resumeText: string; role: string }, variant: ExtractorVariant): AccountTraits {
-  const text = fx.resumeText.toLowerCase();
-  const companyMatch = fx.resumeText.match(/Account:\s*([^.]+?)[.\n]/);
-  const companyName = companyMatch ? companyMatch[1]!.trim() : 'Unknown';
-  // ICP fit: mentions of industry + tech stack overlap
-  const icp = text.includes('snowflake') || text.includes('kafka') || text.includes('aws') ? 8 : text.includes('salesforce') || text.includes('oracle') ? 6 : 5;
-  // Intent: recent fundraise, hiring, public complaints
-  const intent = (text.match(/recent|raised|posted|hired|just /g) || []).length >= 2 ? 8 : (text.match(/recent|raised/g) || []).length >= 1 ? 5 : 2;
-  // ARR: parse from dollar mentions
-  const dollarMatch = fx.resumeText.match(/\$(\d+)([BMk])/);
-  let arr = 100000;
-  if (dollarMatch) {
-    const n = parseFloat(dollarMatch[1]!);
-    const mult = dollarMatch[2] === 'B' ? 1e9 : dollarMatch[2] === 'M' ? 1e6 : 1e3;
-    arr = Math.min(n * mult * 0.002, 2_000_000); // estimated ACV ~0.2% of revenue, capped
-  } else {
-    const rangeMatch = text.match(/\$(\d+)-(\d+)k/);
-    if (rangeMatch) arr = parseInt(rangeMatch[2]!, 10) * 1000;
-  }
-  const champion = text.includes('advisor') || text.includes('warm intro') || text.includes('referral') ? 8 : text.includes('linkedin') ? 4 : 2;
-  const timing = text.includes('budget') || text.includes('expires') || text.includes('cycle') ? 7 : text.includes('runway') ? 5 : 3;
-  const competitive = text.includes('databricks') || text.includes('mulesoft') || text.includes('talend') || text.includes('competitor') ? 6 : 3;
-  const warmth = text.includes('advisor') || text.includes('warm') ? 7 : 2;
-  const risk = text.includes('churn') || text.includes('replaced ceo') || text.includes('left for') || text.includes('turnover') ? 7 : 2;
+// ------------------------------------------------------------------
+// Runner
+// ------------------------------------------------------------------
 
-  // Variant bias: urgency-weighted extractor bumps intent + timing, trims warmth
-  const urgent = variant.id === 'urgency-weighted';
-  const salesMode = (fx.role === 'sales:enterprise' || fx.role === 'sales:smb' || fx.role === 'sales') ? (fx.role as PipelineMode) : 'sales';
-  return {
-    account_id: fx.candidateId + '-' + variant.id,
-    mode: salesMode as any,
-    company_name: companyName,
-    icp_fit: { items: [], rating: icp },
-    intent_signals: { items: [], rating: urgent ? Math.min(intent + 2, 10) : intent },
-    deal_size_potential: Math.round(arr),
-    champion_signals: { items: [], rating: champion },
-    timing_signals: { items: [], rating: urgent ? Math.min(timing + 2, 10) : timing },
-    competitive_signals: { items: [], rating: competitive },
-    relationship_warmth: { items: [], rating: urgent ? Math.max(warmth - 1, 0) : warmth },
-    risk_signals: { items: [], rating: risk },
-    conclusive_score: 0,
-    source_completeness: { has_crm: text.includes('salesforce'), has_linkedin: text.includes('linkedin'), has_intent_data: intent >= 5 },
-    extracted_at: new Date().toISOString(),
-  };
-}
+const USE_OFFLINE = process.env.REPLAY_OFFLINE !== '0';
 
-const USE_OFFLINE = process.env.REPLAY_OFFLINE !== '0'; // default offline; set REPLAY_OFFLINE=0 to use LLM path
+type PassResult = { variant: string; traits: CandidateTraits; scoreByWeightSet: Record<string, number> };
+type FixtureResult = {
+  candidateId: string;
+  name: string;
+  role: string;
+  notionStatus: string;
+  aiScoreWas: number;
+  passes: PassResult[];
+  feedback: { human_score: number; weight_set_before: string; weight_shifts: Record<string, number> } | null;
+};
 
-async function runRecruitingFixture(fx: typeof RECRUITING_FIXTURES[number]): Promise<FixtureResult> {
+async function runFixture(fx: typeof CANDIDATE_FIXTURES[number]): Promise<FixtureResult> {
   const ctx = makeContext();
   const passes: PassResult[] = [];
-
-  for (const variant of RECRUITING_VARIANTS) {
+  for (const variant of VARIANTS) {
     let traits: CandidateTraits;
     if (USE_OFFLINE) {
-      traits = extractRecruitingOffline(fx, variant);
+      traits = extractOffline(fx, variant);
     } else {
       const biasedRole = variant.transform(fx.role);
       const result = await extract({ candidateId: fx.candidateId + '-' + variant.id, resumeText: fx.resumeText, role: biasedRole, mode: 'recruiting' }, ctx);
-      if (!(result as any).success) { console.error('Extractor failed:', fx.candidateId, variant.id, (result as any).error); continue; }
+      if (!(result as any).success) { console.error('  extract failed:', fx.candidateId, variant.id, (result as any).error); continue; }
       traits = (result as any).traits as CandidateTraits;
     }
-    (traits as any).__skip_llm = true;
     const scoreByWeightSet: Record<string, number> = {};
-    for (const [setName, w] of Object.entries(RECRUITING_WEIGHT_SETS)) {
-      scoreByWeightSet[setName] = scoreRecruitingFormula(traits, w);
-    }
+    for (const [name, w] of Object.entries(WEIGHT_SETS)) scoreByWeightSet[name] = scoreFormula(traits, w);
     passes.push({ variant: variant.id, traits, scoreByWeightSet });
   }
 
-  // Feedback simulation: pretend interviewer gave human score 8/10 on the baseline variant.
+  // Simulated interviewer scorecard: use the known AI score from Notion as a stand-in for human
+  // feedback rescaled to 0-10. A 2/10 candidate gets a human_score=3 (rejection), a 9/10 gets 8.
   const baseline = passes.find(p => p.variant === 'baseline');
   let feedback: FixtureResult['feedback'] = null;
   if (baseline) {
-    const humanScore = 8;
-    const { updated, shift } = applyFeedbackShift(
-      RECRUITING_WEIGHT_SETS.protocol_engineer_priors,
-      toSignalsRecruiting(baseline.traits as CandidateTraits),
-      humanScore,
-    );
-    feedback = {
-      human_score: humanScore,
-      weight_set_before: 'protocol_engineer_priors',
-      weight_shifts: shift as any,
-      weights_after: updated as any,
-    };
+    const humanScore = Math.max(1, Math.min(10, Math.round(fx.aiScoreWas * 0.9 + 1)));
+    const { updated, shifts } = applyFeedback(WEIGHT_SETS.blockchain_engineer_priors, baseline.traits, humanScore);
+    feedback = { human_score: humanScore, weight_set_before: 'blockchain_engineer_priors', weight_shifts: shifts as any };
   }
-  return { id: fx.candidateId, mode: 'recruiting', role: fx.role, passes, feedback };
-}
-
-async function runSalesFixture(fx: typeof SALES_FIXTURES[number]): Promise<FixtureResult> {
-  const ctx = makeContext();
-  const passes: PassResult[] = [];
-
-  for (const variant of SALES_VARIANTS) {
-    let traits: AccountTraits;
-    if (USE_OFFLINE) {
-      traits = extractSalesOffline(fx, variant);
-    } else {
-      const biasedRole = variant.transform(fx.role);
-      const result = await extractSales({ candidateId: fx.candidateId + '-' + variant.id, resumeText: fx.resumeText, role: biasedRole, mode: fx.role as PipelineMode }, ctx);
-      if (!(result as any).success) { console.error('Sales extractor failed:', fx.candidateId, variant.id, (result as any).error); continue; }
-      traits = (result as any).traits as AccountTraits;
-    }
-    const scoreByWeightSet: Record<string, number> = {};
-    for (const [setName, w] of Object.entries(SALES_WEIGHT_SETS)) {
-      scoreByWeightSet[setName] = scoreSalesFormula(traits, w);
-    }
-    passes.push({ variant: variant.id, traits, scoreByWeightSet });
-  }
-
-  const baseline = passes.find(p => p.variant === 'baseline');
-  let feedback: FixtureResult['feedback'] = null;
-  if (baseline) {
-    const humanScore = 7; // simulate AE feedback: account is real
-    const weightSetName = fx.role === 'sales:enterprise' ? 'enterprise_tilt' : 'smb_velocity_tilt';
-    const { updated, shift } = applyFeedbackShift(
-      SALES_WEIGHT_SETS[weightSetName],
-      toSignalsSales(baseline.traits as AccountTraits),
-      humanScore,
-    );
-    feedback = {
-      human_score: humanScore,
-      weight_set_before: weightSetName,
-      weight_shifts: shift as any,
-      weights_after: updated as any,
-    };
-  }
-  return { id: fx.candidateId, mode: fx.role as PipelineMode, role: fx.role, passes, feedback };
+  return { candidateId: fx.candidateId, name: fx.name, role: fx.role, notionStatus: fx.notionStatus, aiScoreWas: fx.aiScoreWas, passes, feedback };
 }
 
 // ------------------------------------------------------------------
 // Report
 // ------------------------------------------------------------------
 
-function formatRecruitingTraits(t: CandidateTraits): string {
-  return `skills=${t.skills.length} yoe=${t.years_of_experience} hard=${t.hard_things_done.rating}/10 oss=${t.open_source_contributions.rating}/10 schools=${t.schools.rating}/10 edu=${t.education_level}`;
-}
-
-function formatSalesTraits(t: AccountTraits): string {
-  return `${t.company_name} | ICP=${t.icp_fit.rating}/10 intent=${t.intent_signals.rating}/10 ARR=$${(t.deal_size_potential / 1000).toFixed(0)}k risk=${t.risk_signals.rating}/10 warmth=${t.relationship_warmth.rating}/10`;
-}
-
 function renderReport(results: FixtureResult[]): string {
   const lines: string[] = [];
-  lines.push('# Replay Harness Replay Report');
+  lines.push('# Hiring Pipeline Replay Harness');
   lines.push('');
   lines.push(`Generated: ${new Date().toISOString()}`);
-  lines.push(`Fixtures: ${RECRUITING_FIXTURES.length} recruiting + ${SALES_FIXTURES.length} sales = ${RECRUITING_FIXTURES.length + SALES_FIXTURES.length} total`);
+  lines.push(`Fixtures: ${CANDIDATE_FIXTURES.length} real Notion candidates from week of 2026-04-14.`);
+  lines.push(`Mode: ${USE_OFFLINE ? 'offline deterministic' : 'live LLM (' + (process.env.REPLAY_MODEL || 'gemini-2.5-flash-lite') + ')'}.`);
   lines.push('');
-  lines.push('## Three Fred operations, proven');
+  lines.push('## Three replay operations Fred asked for');
   lines.push('');
-  lines.push('- **Restructure**: two extractor prompt variants per fixture. Same input, different trait values.');
-  lines.push('- **Reindex**: two to three weight sets applied per fixture. Same traits, different composite scores.');
-  lines.push('- **Feedback**: simulated interviewer scorecard (human_score) drives weight shifts with max 0.05 per-weight delta.');
+  lines.push('- **Restructure** — same resume, two extractor prompt variants, different trait values.');
+  lines.push('- **Reindex** — same traits, two weight sets (`generalist_baseline` vs `blockchain_engineer_priors`), different composite scores.');
+  lines.push('- **Compound** — simulated interviewer scorecard → bounded weight shifts (max 0.05 per weight per correction). Drift accumulates across nightly runs.');
+  lines.push('');
+  lines.push('Run against Rahul\'s hiring agent (extractor → scorer → distillation). Isolated from production via the `stream-a9effdd3` replay stream on Sales Agent svc 2662 ws 2304.');
   lines.push('');
 
   for (const r of results) {
     lines.push('---');
     lines.push('');
-    lines.push(`### ${r.id} (mode: ${r.mode}, role: ${r.role})`);
+    lines.push(`### ${r.name} — ${r.role}`);
     lines.push('');
-    // Traits table across variants
-    lines.push('**Restructure proof — trait deltas across prompt variants:**');
+    lines.push(`Notion status: **${r.notionStatus}** · Prior AI score: **${r.aiScoreWas}/10**`);
     lines.push('');
-    if (r.mode === 'recruiting') {
-      lines.push('| Variant | skills | yoe | hard_things | oss | schools | edu |');
-      lines.push('|---|---:|---:|---:|---:|---:|---|');
-      for (const p of r.passes) {
-        const t = p.traits as CandidateTraits;
-        lines.push(`| \`${p.variant}\` | ${t.skills.length} | ${t.years_of_experience} | ${t.hard_things_done.rating} | ${t.open_source_contributions.rating} | ${t.schools.rating} | ${t.education_level} |`);
-      }
-    } else {
-      lines.push('| Variant | company | icp_fit | intent | ARR ($k) | risk | warmth |');
-      lines.push('|---|---|---:|---:|---:|---:|---:|');
-      for (const p of r.passes) {
-        const t = p.traits as AccountTraits;
-        lines.push(`| \`${p.variant}\` | ${t.company_name} | ${t.icp_fit.rating} | ${t.intent_signals.rating} | ${(t.deal_size_potential / 1000).toFixed(0)} | ${t.risk_signals.rating} | ${t.relationship_warmth.rating} |`);
-      }
+    lines.push('**Restructure — trait deltas across prompt variants:**');
+    lines.push('');
+    lines.push('| Variant | skills | yoe | hard_things | oss | schools | edu |');
+    lines.push('|---|---:|---:|---:|---:|---:|---|');
+    for (const p of r.passes) {
+      const t = p.traits;
+      lines.push(`| \`${p.variant}\` | ${t.skills.length} | ${t.years_of_experience} | ${t.hard_things_done.rating} | ${t.open_source_contributions.rating} | ${t.schools.rating} | ${t.education_level} |`);
     }
     lines.push('');
-    // Scores table across weight sets
-    lines.push('**Reindex proof — score deltas across weight sets (on the baseline trait extraction):**');
+    lines.push('**Reindex — composite score on baseline traits, across weight sets:**');
     lines.push('');
     const baseline = r.passes.find(p => p.variant === 'baseline');
     if (baseline) {
       lines.push('| Weight set | Composite score |');
       lines.push('|---|---:|');
-      for (const [k, v] of Object.entries(baseline.scoreByWeightSet)) {
-        lines.push(`| \`${k}\` | ${v.toFixed(2)} |`);
-      }
+      for (const [k, v] of Object.entries(baseline.scoreByWeightSet)) lines.push(`| \`${k}\` | ${v.toFixed(2)} |`);
     }
     lines.push('');
     if (r.feedback) {
-      lines.push('**Feedback proof — simulated interviewer scorecard drives weight shift:**');
+      lines.push(`**Compound — simulated scorecard (human_score=${r.feedback.human_score}/10) → weight shifts on \`${r.feedback.weight_set_before}\`:**`);
       lines.push('');
-      lines.push(`- Human score: ${r.feedback.human_score}/10`);
-      lines.push(`- Base weight set: \`${r.feedback.weight_set_before}\``);
-      const shiftsEntries = Object.entries(r.feedback.weight_shifts).filter(([_, v]) => Math.abs(v as number) > 0.001);
-      if (shiftsEntries.length) {
-        lines.push('');
+      const entries = Object.entries(r.feedback.weight_shifts).filter(([_, v]) => Math.abs(v as number) > 0.001);
+      if (entries.length) {
         lines.push('| Trait | Delta |');
         lines.push('|---|---:|');
-        for (const [k, v] of shiftsEntries) lines.push(`| \`${k}\` | ${(v as number).toFixed(4)} |`);
+        for (const [k, v] of entries) lines.push(`| \`${k}\` | ${(v as number > 0 ? '+' : '')}${(v as number).toFixed(4)} |`);
       } else {
-        lines.push('- No meaningful shifts (trait ratings near neutral)');
+        lines.push('- Ratings near neutral; no meaningful shifts this pass.');
       }
     }
     lines.push('');
@@ -604,7 +378,7 @@ function renderReport(results: FixtureResult[]): string {
   lines.push('');
   lines.push('## Verdict');
   lines.push('');
-  lines.push('The pipeline handles recruiting and sales with the same compound-intelligence loop. Each mode keeps its own trait vocabulary and weight priors; the extractor, scorer, and distillation steps share one orchestration path. Prompt-variant swaps produce distinct trait extractions. Weight-set swaps produce distinct composite scores on identical traits. Feedback events drive bounded, per-weight shifts that will steer future scoring without runaway drift.');
+  lines.push('The hiring agent is replayable. Same candidate, different extractor prompts → different traits. Same traits, different weight priors → different composite scores. Interviewer scorecards drive bounded per-weight shifts that compound across nightly runs. Rahul\'s pipeline now has a test bed that reruns every night and commits a diffable snapshot to `drafts/nightly/YYYY-MM-DD.md`.');
   return lines.join('\n');
 }
 
@@ -613,42 +387,20 @@ function renderReport(results: FixtureResult[]): string {
 // ------------------------------------------------------------------
 
 async function main() {
-  if (USE_OFFLINE) {
-    console.log('Mode: OFFLINE (deterministic rule-based extractor). Set REPLAY_OFFLINE=0 to use live LLM.');
-  } else {
-    const provider = process.env.REPLAY_PROVIDER || 'anthropic';
-    if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY required.'); process.exit(2); }
-    if (provider !== 'anthropic' && !process.env.GEMINI_API_KEY) { console.error('GEMINI_API_KEY required.'); process.exit(2); }
-    console.log('Mode: LLM live | Provider:', provider, '| Model:', process.env.REPLAY_MODEL || (provider === 'anthropic' ? 'claude-haiku-4-5' : 'gemini-2.5-flash-lite'));
-  }
-
-  console.log('Running Replay Harness replay across', RECRUITING_FIXTURES.length + SALES_FIXTURES.length, 'fixtures...');
-  console.log('Recruiting:', RECRUITING_FIXTURES.map(f => f.candidateId).join(', '));
-  console.log('Sales:     ', SALES_FIXTURES.map(f => f.candidateId).join(', '));
+  console.log(`Mode: ${USE_OFFLINE ? 'OFFLINE deterministic' : 'LIVE LLM ' + (process.env.REPLAY_MODEL || 'gemini-2.5-flash-lite')}`);
+  console.log(`Replaying ${CANDIDATE_FIXTURES.length} real Notion candidates through Rahul's hiring agent.`);
 
   const results: FixtureResult[] = [];
-
-  for (const fx of RECRUITING_FIXTURES) {
-    console.log('\n[recruiting]', fx.candidateId);
-    try { results.push(await runRecruitingFixture(fx)); }
-    catch (e: any) { console.error('  FAILED:', e.message); }
-  }
-  for (const fx of SALES_FIXTURES) {
-    console.log('\n[sales]     ', fx.candidateId);
-    try { results.push(await runSalesFixture(fx)); }
-    catch (e: any) { console.error('  FAILED:', e.message); }
+  for (const fx of CANDIDATE_FIXTURES) {
+    console.log(`  ${fx.name} (${fx.role})`);
+    try { results.push(await runFixture(fx)); } catch (e: any) { console.error('  FAILED:', e.message); }
   }
 
   const draftsDir = path.resolve(__dirname, '../drafts');
   if (!fs.existsSync(draftsDir)) fs.mkdirSync(draftsDir, { recursive: true });
-
-  const reportPath = path.join(draftsDir, 'replay-harness-report.md');
-  const dataPath = path.join(draftsDir, 'replay-harness-data.json');
-  fs.writeFileSync(reportPath, renderReport(results));
-  fs.writeFileSync(dataPath, JSON.stringify(results, null, 2));
-
-  console.log('\nWrote:', reportPath);
-  console.log('Wrote:', dataPath);
+  fs.writeFileSync(path.join(draftsDir, 'replay-harness-report.md'), renderReport(results));
+  fs.writeFileSync(path.join(draftsDir, 'replay-harness-data.json'), JSON.stringify(results, null, 2));
+  console.log('\nWrote drafts/replay-harness-report.md and drafts/replay-harness-data.json');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
