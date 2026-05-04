@@ -1,0 +1,3 @@
+# Local-dev only — must not be uploaded to the Cere Sandbox.
+# Keeping these in git is fine, but flag clearly that they're dev-only.
+# (No exclusions yet — placeholder for future build artifacts.)

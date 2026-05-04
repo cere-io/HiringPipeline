@@ -1,0 +1,45 @@
+{
+  "columns": ["payload"],
+  "rows": [
+    [
+      {
+        "role": "AI Engineer",
+        "role_key": "ai-engineer",
+        "versions": { "previous": "v3", "current": "v4" },
+        "feedback_count": 3,
+        "window": "Last 14 days · 9 candidates re-scored.",
+        "traits": [
+          { "name": "hard_things_done",          "old": 0.20, "new": 0.27 },
+          { "name": "open_source_contributions", "old": 0.10, "new": 0.14 },
+          { "name": "company_signals",           "old": 0.10, "new": 0.12 },
+          { "name": "skills",                    "old": 0.10, "new": 0.10 },
+          { "name": "hackathons",                "old": 0.10, "new": 0.08 },
+          { "name": "schools",                   "old": 0.10, "new": 0.07 },
+          { "name": "years_of_experience",       "old": 0.10, "new": 0.08 },
+          { "name": "education_level",           "old": 0.10, "new": 0.07 },
+          { "name": "company_stages",            "old": 0.10, "new": 0.07 }
+        ],
+        "rubric_diff": [
+          { "op": "context", "text": "Score AI Engineer candidates on the following signals:" },
+          { "op": "context", "text": "" },
+          { "op": "context", "text": "- hard_things_done: shipped systems with real users, ambiguity resolved" },
+          { "op": "add",     "text": "  · weight raised — interviewers consistently flagged scaling stories as predictive" },
+          { "op": "add",     "text": "  · prefer concrete metrics (latency, RPS, cost) over adjectives" },
+          { "op": "context", "text": "- open_source_contributions: meaningful PRs to projects > 1k stars" },
+          { "op": "modify",  "text": "  · counter-pattern: drive-by docs PRs do NOT count (added after Nathan eval)" },
+          { "op": "context", "text": "- schools" },
+          { "op": "remove",  "text": "  · Tier-1 school = +1 to rating (over-indexed; 4 false positives in Q1)" },
+          { "op": "add",     "text": "  · de-emphasized — school is a weak signal vs hard_things_done" },
+          { "op": "context", "text": "- hackathons: weight reduced — does not predict on-the-job execution" },
+          { "op": "add",     "text": "- emotion / between-the-lines: extract hesitation in scaling questions" }
+        ],
+        "triggers": [
+          { "who": "Steven C.", "what": "rejected after onsite — 'great hackathons but no production scaling'", "when": "Apr 26" },
+          { "who": "Sergey",    "what": "marked Nathan 6.5 (was AI-scored 8.0) — drive-by OSS contributions",   "when": "Apr 24" },
+          { "who": "Fred",      "what": "added counter-pattern: 'tier-1 school ≠ shipped under load'",          "when": "Apr 22" }
+        ]
+      }
+    ]
+  ],
+  "meta": { "duration": 0, "rowsRead": 1 }
+}
