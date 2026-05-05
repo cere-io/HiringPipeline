@@ -1,0 +1,65 @@
+name: Replay Harness nightly replay
+
+# Fred's 2026-04-17 ask: "continuously re-run with current weight set to surface drift."
+# Runs the Replay Harness replay once per night against the same fixtures. Uploads the report as
+# a build artifact so anyone can check the delta tables without cloning. Also emits the
+# latest report into the drafts/nightly/ directory of the branch so it's diffable over time.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # 06:17 UTC daily (~08:17 CET, before SEK)
+  workflow_dispatch:        # manual trigger
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install deps
+        run: npm ci || npm install
+
+      - name: Run Replay Harness (live LLM if any key set, otherwise offline)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REPLAY_OFFLINE: ${{ (secrets.ANTHROPIC_API_KEY != '' || secrets.GEMINI_API_KEY != '') && '0' || '1' }}
+          REPLAY_PROVIDER: ${{ secrets.ANTHROPIC_API_KEY != '' && 'anthropic' || 'gemini' }}
+          REPLAY_MODEL: ${{ secrets.ANTHROPIC_API_KEY != '' && 'claude-haiku-4-5' || 'gemini-2.5-flash-lite' }}
+        run: |
+          ls scripts/ drafts/ 2>&1 || true
+          npx tsx scripts/replay-harness.ts
+          echo "--- drafts/ after run ---"
+          ls -la drafts/
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-harness-report-${{ github.run_id }}
+          path: |
+            drafts/replay-harness-report.md
+            drafts/replay-harness-data.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit nightly snapshot
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/mode-flag-sales-recruiting'
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          mkdir -p drafts/nightly
+          cp drafts/replay-harness-report.md "drafts/nightly/$DATE.md"
+          cp drafts/replay-harness-data.json "drafts/nightly/$DATE.json"
+          git config user.name "replay-harness-bot"
+          git config user.email "replay-harness-bot@users.noreply.github.com"
+          git add drafts/nightly/
+          git diff --cached --quiet || git commit -m "chore(replay-harness): nightly snapshot $DATE"
+          git push || echo "push skipped (no new snapshot or protected branch)"

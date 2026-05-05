@@ -1,0 +1,63 @@
+{
+  "columns": ["payload"],
+  "rows": [
+    [
+      {
+        "candidate": {
+          "id": "cand_nathan_k",
+          "name": "Nathan K.",
+          "role": "AI Engineer"
+        },
+        "composite_score": 65,
+        "rounds_count": 3,
+        "rubric_version": "v4",
+        "last_updated": "Apr 28",
+        "strengths": [
+          {
+            "trait": "hackathons",
+            "rating": 9.0,
+            "evidence": [
+              "Top 3 at ETHGlobal SF '24 — agent orchestration prototype",
+              "Won EIP-7702 hack at Devcon Bangkok"
+            ],
+            "surfaced_by": "TraitExtractor",
+            "source": "resume + GitHub scan"
+          },
+          {
+            "trait": "open_source_contributions",
+            "rating": 7.5,
+            "evidence": [
+              "12 PRs merged across viem, hardhat, foundry — all docs/typo fixes",
+              "No substantive commits to a project >1k stars"
+            ],
+            "surfaced_by": "TraitExtractor",
+            "source": "GitHub scan"
+          }
+        ],
+        "concerns": [
+          {
+            "trait": "hard_things_done",
+            "rating": 4.5,
+            "evidence": [
+              "Hesitated on 'tell me about a system you scaled past 10k RPS' — pivoted to a hackathon project",
+              "No evidence of on-call ownership or production incident handling"
+            ],
+            "surfaced_by": "TranscriptAnalyzer",
+            "source": "Round 2 interview · Sergey"
+          },
+          {
+            "trait": "company_signals",
+            "rating": 5.0,
+            "evidence": [
+              "Two stints under 10 months at early-stage startups",
+              "No reference able to vouch for shipped systems past beta"
+            ],
+            "surfaced_by": "Distillation",
+            "source": "reference + LinkedIn"
+          }
+        ]
+      }
+    ]
+  ],
+  "meta": { "duration": 0, "rowsRead": 1 }
+}

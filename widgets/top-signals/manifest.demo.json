@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "widgetId": "hiring-top-signals",
+  "name": "Candidate Top Signals",
+  "generatedAt": "2026-04-29T00:00:00.000Z",
+  "runtime": {
+    "kind": "html",
+    "sdkScript": "./widget-runtime.js",
+    "devWalletMode": true
+  },
+  "sdk": {
+    "agentServicePubKey": "REPLACE_WITH_AGENT_SERVICE_PUBKEY",
+    "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+    "streamId": "REPLACE_WITH_STREAM_ID",
+    "urls": {
+      "ddcComputeUrl": "https://compute.dev.cere.network",
+      "webTransportUrl": "https://transport.dev.cere.network",
+      "eventRuntimeUrl": "https://events.dev.cere.network",
+      "agentRuntimeUrl": "https://agents.dev.cere.network",
+      "sisApiUrl": "https://sis.dev.cere.network",
+      "garUrl": "https://gar.dev.cere.network"
+    },
+    "agreement": {
+      "ttlSeconds": 3600,
+      "scopes": [
+        {
+          "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+          "streamId": "REPLACE_WITH_STREAM_ID"
+        }
+      ]
+    }
+  },
+  "sqliteCubby": {
+    "cubbyId": "hiring-traits-sqlite",
+    "alias": "hiring-traits",
+    "instanceId": "default"
+  },
+  "query": {
+    "id": "top-signals-by-candidate-inline",
+    "label": "Distilled top signals (inline demo data)",
+    "sql": "SELECT '{\"candidate\":{\"id\":\"cand_nathan_k\",\"name\":\"Nathan K.\",\"role\":\"AI Engineer\"},\"composite_score\":65,\"rounds_count\":3,\"rubric_version\":\"v4\",\"last_updated\":\"Apr 28\",\"strengths\":[{\"trait\":\"hackathons\",\"rating\":9,\"evidence\":[\"Top 3 at ETHGlobal SF ''24 — agent orchestration prototype\",\"Won EIP-7702 hack at Devcon Bangkok\"],\"surfaced_by\":\"TraitExtractor\",\"source\":\"resume + GitHub scan\"},{\"trait\":\"open_source_contributions\",\"rating\":7.5,\"evidence\":[\"12 PRs merged across viem, hardhat, foundry — all docs/typo fixes\",\"No substantive commits to a project >1k stars\"],\"surfaced_by\":\"TraitExtractor\",\"source\":\"GitHub scan\"}],\"concerns\":[{\"trait\":\"hard_things_done\",\"rating\":4.5,\"evidence\":[\"Hesitated on ''tell me about a system you scaled past 10k RPS'' — pivoted to a hackathon project\",\"No evidence of on-call ownership or production incident handling\"],\"surfaced_by\":\"TranscriptAnalyzer\",\"source\":\"Round 2 interview · Sergey\"},{\"trait\":\"company_signals\",\"rating\":5,\"evidence\":[\"Two stints under 10 months at early-stage startups\",\"No reference able to vouch for shipped systems past beta\"],\"surfaced_by\":\"Distillation\",\"source\":\"reference + LinkedIn\"}]}' AS payload",
+    "params": [],
+    "timeoutMs": 5000,
+    "execution": "client.query.sql",
+    "refresh": {
+      "enabled": false
+    },
+    "urlParams": []
+  },
+  "render": {
+    "mode": "table"
+  }
+}

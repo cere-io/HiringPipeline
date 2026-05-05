@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "widgetId": "hiring-rubric-diff",
+  "name": "Hiring Rubric — Compound Learning",
+  "generatedAt": "2026-04-29T00:00:00.000Z",
+  "runtime": {
+    "kind": "html",
+    "sdkScript": "./widget-runtime.js",
+    "devWalletMode": true
+  },
+  "sdk": {
+    "agentServicePubKey": "REPLACE_WITH_AGENT_SERVICE_PUBKEY",
+    "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+    "streamId": "REPLACE_WITH_STREAM_ID",
+    "urls": {
+      "ddcComputeUrl": "https://compute.dev.cere.network",
+      "webTransportUrl": "https://transport.dev.cere.network",
+      "eventRuntimeUrl": "https://events.dev.cere.network",
+      "agentRuntimeUrl": "https://agents.dev.cere.network",
+      "sisApiUrl": "https://sis.dev.cere.network",
+      "garUrl": "https://gar.dev.cere.network"
+    },
+    "agreement": {
+      "ttlSeconds": 3600,
+      "scopes": [
+        {
+          "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+          "streamId": "REPLACE_WITH_STREAM_ID"
+        }
+      ]
+    }
+  },
+  "sqliteCubby": {
+    "cubbyId": "hiring-meta-sqlite",
+    "alias": "hiring-meta",
+    "instanceId": "default"
+  },
+  "query": {
+    "id": "rubric-diff-latest-inline",
+    "label": "Latest rubric diff (inline demo data)",
+    "sql": "SELECT '{\"role\":\"AI Engineer\",\"role_key\":\"ai-engineer\",\"versions\":{\"previous\":\"v3\",\"current\":\"v4\"},\"feedback_count\":3,\"window\":\"Last 14 days · 9 candidates re-scored.\",\"traits\":[{\"name\":\"hard_things_done\",\"old\":0.2,\"new\":0.27},{\"name\":\"open_source_contributions\",\"old\":0.1,\"new\":0.14},{\"name\":\"company_signals\",\"old\":0.1,\"new\":0.12},{\"name\":\"skills\",\"old\":0.1,\"new\":0.1},{\"name\":\"hackathons\",\"old\":0.1,\"new\":0.08},{\"name\":\"schools\",\"old\":0.1,\"new\":0.07},{\"name\":\"years_of_experience\",\"old\":0.1,\"new\":0.08},{\"name\":\"education_level\",\"old\":0.1,\"new\":0.07},{\"name\":\"company_stages\",\"old\":0.1,\"new\":0.07}],\"rubric_diff\":[{\"op\":\"context\",\"text\":\"Score AI Engineer candidates on the following signals:\"},{\"op\":\"context\",\"text\":\"\"},{\"op\":\"context\",\"text\":\"- hard_things_done: shipped systems with real users, ambiguity resolved\"},{\"op\":\"add\",\"text\":\"  · weight raised — interviewers consistently flagged scaling stories as predictive\"},{\"op\":\"add\",\"text\":\"  · prefer concrete metrics (latency, RPS, cost) over adjectives\"},{\"op\":\"context\",\"text\":\"- open_source_contributions: meaningful PRs to projects > 1k stars\"},{\"op\":\"modify\",\"text\":\"  · counter-pattern: drive-by docs PRs do NOT count (added after Nathan eval)\"},{\"op\":\"context\",\"text\":\"- schools\"},{\"op\":\"remove\",\"text\":\"  · Tier-1 school = +1 to rating (over-indexed; 4 false positives in Q1)\"},{\"op\":\"add\",\"text\":\"  · de-emphasized — school is a weak signal vs hard_things_done\"},{\"op\":\"context\",\"text\":\"- hackathons: weight reduced — does not predict on-the-job execution\"},{\"op\":\"add\",\"text\":\"- emotion / between-the-lines: extract hesitation in scaling questions\"}],\"triggers\":[{\"who\":\"Steven C.\",\"what\":\"rejected after onsite — ''great hackathons but no production scaling''\",\"when\":\"Apr 26\"},{\"who\":\"Sergey\",\"what\":\"marked Nathan 6.5 (was AI-scored 8.0) — drive-by OSS contributions\",\"when\":\"Apr 24\"},{\"who\":\"Fred\",\"what\":\"added counter-pattern: ''tier-1 school ≠ shipped under load''\",\"when\":\"Apr 22\"}]}' AS payload",
+    "params": [],
+    "timeoutMs": 5000,
+    "execution": "client.query.sql",
+    "refresh": {
+      "enabled": true,
+      "intervalMs": 30000
+    },
+    "urlParams": []
+  },
+  "render": {
+    "mode": "table"
+  }
+}

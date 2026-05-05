@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "widgetId": "hiring-score-evolution",
+  "name": "Candidate Score Evolution",
+  "generatedAt": "2026-04-29T00:00:00.000Z",
+  "runtime": {
+    "kind": "html",
+    "sdkScript": "./widget-runtime.js",
+    "devWalletMode": true
+  },
+  "sdk": {
+    "agentServicePubKey": "REPLACE_WITH_AGENT_SERVICE_PUBKEY",
+    "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+    "streamId": "REPLACE_WITH_STREAM_ID",
+    "urls": {
+      "ddcComputeUrl": "https://compute.dev.cere.network",
+      "webTransportUrl": "https://transport.dev.cere.network",
+      "eventRuntimeUrl": "https://events.dev.cere.network",
+      "agentRuntimeUrl": "https://agents.dev.cere.network",
+      "sisApiUrl": "https://sis.dev.cere.network",
+      "garUrl": "https://gar.dev.cere.network"
+    },
+    "agreement": {
+      "ttlSeconds": 3600,
+      "scopes": [
+        {
+          "workspaceId": "REPLACE_WITH_WORKSPACE_ID",
+          "streamId": "REPLACE_WITH_STREAM_ID"
+        }
+      ]
+    }
+  },
+  "sqliteCubby": {
+    "cubbyId": "hiring-scores-sqlite",
+    "alias": "hiring-scores",
+    "instanceId": "default"
+  },
+  "query": {
+    "id": "score-evolution-by-candidate-inline",
+    "label": "Score history for a candidate (inline demo data)",
+    "sql": "SELECT '{\"candidate\":{\"id\":\"cand_nathan_k\",\"name\":\"Nathan K.\",\"role\":\"AI Engineer\"},\"verdict\":\"rejected\",\"reject_threshold\":70,\"subnote\":\"First scored Apr 19 · re-scored Apr 28 after distillation pass.\",\"history\":[{\"version\":\"v1\",\"score\":82,\"note\":\"Initial scoring — default weights\"},{\"version\":\"v2\",\"score\":78,\"note\":\"Hackathons de-emphasized after Sergey feedback\"},{\"version\":\"v3\",\"score\":71,\"note\":\"Counter-pattern added: drive-by OSS PRs don''t count\"},{\"version\":\"v4\",\"score\":65,\"note\":\"hard_things_done weight raised to 0.27 (compounded)\"}],\"takeaway\":\"Nathan would have passed the v1 rubric (82 / threshold 70). After 3 interviewer feedback events compounded into the skill, the same evidence now scores 65 — below threshold. The system learned what we kept missing.\"}' AS payload",
+    "params": [],
+    "timeoutMs": 5000,
+    "execution": "client.query.sql",
+    "refresh": {
+      "enabled": false
+    },
+    "urlParams": []
+  },
+  "render": {
+    "mode": "table"
+  }
+}

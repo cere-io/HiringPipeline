@@ -1,0 +1,25 @@
+{
+  "columns": ["payload"],
+  "rows": [
+    [
+      {
+        "candidate": {
+          "id": "cand_nathan_k",
+          "name": "Nathan K.",
+          "role": "AI Engineer"
+        },
+        "verdict": "rejected",
+        "reject_threshold": 70,
+        "subnote": "First scored Apr 19 · re-scored Apr 28 after distillation pass.",
+        "history": [
+          { "version": "v1", "score": 82, "note": "Initial scoring — default weights" },
+          { "version": "v2", "score": 78, "note": "Hackathons de-emphasized after Sergey feedback" },
+          { "version": "v3", "score": 71, "note": "Counter-pattern added: drive-by OSS PRs don't count" },
+          { "version": "v4", "score": 65, "note": "hard_things_done weight raised to 0.27 (compounded)" }
+        ],
+        "takeaway": "Nathan would have passed the v1 rubric (82 / threshold 70). After 3 interviewer feedback events compounded into the skill, the same evidence now scores 65 — below threshold. The system learned what we kept missing."
+      }
+    ]
+  ],
+  "meta": { "duration": 0, "rowsRead": 1 }
+}

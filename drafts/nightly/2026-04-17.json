@@ -1,0 +1,155 @@
+[
+  {
+    "id": "cand-alexandros",
+    "mode": "recruiting",
+    "role": "Senior Protocol Engineer",
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-alexandros-baseline",
+          "skills": [
+            "TypeScript",
+            "React",
+            "Node",
+            "Postgres",
+            "AWS",
+            "Kubernetes",
+            "SaaS",
+            "Microservices",
+            "Mentoring"
+          ],
+          "years_of_experience": 8,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "Athens University"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [
+              "Led migration of core platform from monolith to microservices"
+            ],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T13:06:24.658Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 46.83,
+          "protocol_engineer_priors": 50.33
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-alexandros-depth-over-breadth",
+          "skills": [
+            "TypeScript",
+            "React",
+            "Node.js",
+            "PostgreSQL",
+            "AWS",
+            "Kubernetes",
+            "Microservices",
+            "SaaS",
+            "Health-tech",
+            "Mentoring",
+            "Fullstack Development"
+          ],
+          "years_of_experience": 8,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "Athens University"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [
+              "Led migration of core platform from monolith to microservices"
+            ],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [
+              "Series B startups"
+            ],
+            "rating": 5
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-04-17T13:06:31.891Z",
+          "__skip_llm": true
+        },
+        "scoreByWeightSet": {
+          "baseline_generalist": 53.33,
+          "protocol_engineer_priors": 53.83
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 8,
+      "weight_set_before": "protocol_engineer_priors",
+      "weight_shifts": {
+        "skills": 0.024,
+        "years_of_experience": 0.002,
+        "company_stages": 0,
+        "education_level": 0.006,
+        "schools": 0,
+        "hard_things_done": 0.018,
+        "hackathons": -0.03,
+        "open_source_contributions": -0.03,
+        "company_signals": -0.03
+      },
+      "weights_after": {
+        "skills": 0.124,
+        "years_of_experience": 0.102,
+        "company_stages": 0.05,
+        "education_level": 0.056,
+        "schools": 0.05,
+        "hard_things_done": 0.368,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.17,
+        "company_signals": 0.02
+      }
+    }
+  }
+]

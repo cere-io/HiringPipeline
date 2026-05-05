@@ -1,7 +1,9 @@
-import { Event, Context, TraitWeights, CandidateScore, CandidateTraits } from '../types';
+import { Event, Context, TraitWeights, CandidateScore, CandidateTraits, AccountTraits, SalesTraitWeights, PipelineMode, DEFAULT_SALES_WEIGHTS } from '../types';
 
 export async function handle(event: Event, context: Context) {
-    return score(event.payload, context);
+    const mode: PipelineMode = event.payload?.mode ?? 'recruiting';
+    if (mode === 'recruiting') return score(event.payload, context);
+    return scoreSales(event.payload, context);
 }
 
 function geminiEndpoint(): string {
@@ -24,8 +26,9 @@ function extractJson(raw: string): any {
 }
 
 export async function score(payload: any, context: Context) {
-    const { candidateId, role } = payload;
+    const { candidateId, role, mode } = payload;
 
+    if (mode && mode !== 'recruiting') return scoreSales(payload, context);
     if (!candidateId || !role) {
         return { success: false, error: 'Missing candidateId or role' };
     }
@@ -114,5 +117,57 @@ Score this candidate 0-100 by applying the weights to each signal. Return ONLY t
     scoresCubby.json.set(`/${candidateId}`, scoreRecord);
     context.log('Saved score to hiring-scores cubby:', scoreRecord.composite_score);
 
+    return { success: true, score: scoreRecord };
+}
+
+/** Sales-mode composite scorer. Formula-based (no LLM) for determinism + zero LLM cost.
+ *  Same compound-learning loop: weights are per-segment, tuned by distillation from AE feedback. */
+export async function scoreSales(payload: any, context: Context) {
+    const { candidateId, role, mode } = payload;
+    const accountId = candidateId;
+    const segment = role || 'sales';
+    if (!accountId) return { success: false, error: 'Missing accountId (candidateId)' };
+
+    context.log('Scoring account:', accountId, 'segment:', segment, 'mode:', mode);
+    const traitsCubby = context.cubby('hiring-traits');
+    const traits: AccountTraits = traitsCubby.json.get(`/${accountId}`);
+    if (!traits) throw new Error(`Account traits not found for ${accountId}`);
+
+    const metaCubby = context.cubby('hiring-meta');
+    let weights: SalesTraitWeights = metaCubby.json.get(`/sales_weights/${segment}`);
+    if (!weights) {
+        weights = { ...DEFAULT_SALES_WEIGHTS };
+        metaCubby.json.set(`/sales_weights/${segment}`, weights);
+    }
+
+    const arrRating = Math.min(Math.log10(Math.max(traits.deal_size_potential, 1000)) / 6, 1) * 10;
+    const components: Record<keyof SalesTraitWeights, number> = {
+        icp_fit: traits.icp_fit.rating,
+        intent_signals: traits.intent_signals.rating,
+        deal_size_potential: arrRating,
+        champion_strength: traits.champion_signals.rating,
+        timing: traits.timing_signals.rating,
+        decision_velocity: 5,
+        competitive_displacement: traits.competitive_signals.rating,
+        relationship_warmth: traits.relationship_warmth.rating,
+        risk_signals: traits.risk_signals.rating,
+    };
+    let total = 0;
+    for (const k of Object.keys(weights) as (keyof SalesTraitWeights)[]) total += components[k] * weights[k];
+    const compositeScore = Math.max(0, Math.min(100, total));
+
+    traits.conclusive_score = parseFloat(compositeScore.toFixed(2));
+    traitsCubby.json.set(`/${accountId}`, traits);
+
+    const scoreRecord: CandidateScore = {
+        id: accountId,
+        mode: mode as PipelineMode,
+        composite_score: traits.conclusive_score,
+        weights_used: weights,
+        timestamp: new Date().toISOString(),
+    };
+    const scoresCubby = context.cubby('hiring-scores');
+    scoresCubby.json.set(`/${accountId}`, scoreRecord);
+    context.log('Saved sales score:', scoreRecord.composite_score);
     return { success: true, score: scoreRecord };
 }

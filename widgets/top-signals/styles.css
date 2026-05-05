@@ -1,0 +1,216 @@
+:root {
+  --bg: #0b0d12;
+  --panel: #11141b;
+  --border: #1f2430;
+  --fg: #e6e8ee;
+  --muted: #7a8294;
+  --accent: #7ad3ff;
+  --good: #4ade80;
+  --bad: #f87171;
+  --warn: #fbbf24;
+  --chip-bg: #1a1f2b;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+#app { padding: 18px 20px; }
+
+.loading { color: var(--muted); padding: 40px; text-align: center; }
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.head .who {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.head h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.head .role { font-size: 12px; color: var(--muted); }
+
+.composite {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.composite .score-num {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.composite .score-num.high { color: var(--good); }
+.composite .score-num.mid  { color: var(--warn); }
+.composite .score-num.low  { color: var(--bad); }
+
+.composite .score-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.subhead {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.subhead strong { color: var(--fg); font-weight: 500; }
+
+.section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 14px 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title.strength::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+.section-title.concern::before  { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--bad); }
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 11px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 4px;
+}
+
+.card .trait {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  font-family: "SF Mono", Menlo, monospace;
+  letter-spacing: -0.01em;
+}
+
+.card .rating {
+  grid-row: 1 / span 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.card .rating .num {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+}
+
+.card.strength .rating .num { color: var(--good); }
+.card.concern .rating .num { color: var(--bad); }
+
+.card .rating .bar {
+  width: 70px;
+  height: 5px;
+  background: #1a1f2b;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.card .rating .bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.card.strength .rating .bar-fill { background: var(--good); }
+.card.concern .rating .bar-fill { background: var(--bad); }
+
+.card .evidence {
+  grid-column: 1 / span 2;
+  font-size: 12.5px;
+  color: var(--fg);
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card .evidence li {
+  padding-left: 14px;
+  position: relative;
+  margin: 2px 0;
+}
+
+.card .evidence li::before {
+  content: "›";
+  position: absolute;
+  left: 2px;
+  color: var(--muted);
+}
+
+.card .source {
+  grid-column: 1 / span 2;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.card .source .agent {
+  color: var(--accent);
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+}
+
+.foot {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.foot .pill {
+  display: inline-block;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

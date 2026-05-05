@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "widgetId": "hiring-top-signals",
+  "name": "Candidate Top Signals",
+  "generatedAt": "2026-04-29T00:00:00.000Z",
+  "runtime": {
+    "kind": "html",
+    "sdkScript": "./widget-runtime.js",
+    "devWalletMode": true
+  },
+  "sdk": {
+    "agentServicePubKey": "f1297e89f0b59964ad5ba68ba1e3b52733f22d8bbd275ebde4fdf461c9c76e7e",
+    "workspaceId": "2386",
+    "streamId": "stream-c53f3c5e",
+    "urls": {
+      "ddcComputeUrl": "https://orchestrator.compute.dev.ddcdragon.com",
+      "webTransportUrl": "https://sis-0.compute.dev.ddcdragon.com:4433",
+      "eventRuntimeUrl": "https://events.compute.dev.ddcdragon.com",
+      "agentRuntimeUrl": "https://agent.compute.dev.ddcdragon.com",
+      "sisApiUrl": "https://sis.compute.dev.ddcdragon.com",
+      "garUrl": "https://gar.compute.dev.ddcdragon.com/"
+    },
+    "agreement": {
+      "ttlSeconds": 3600,
+      "scopes": [
+        {
+          "workspaceId": "2386",
+          "streamId": "stream-c53f3c5e"
+        }
+      ]
+    }
+  },
+  "sqliteCubby": {
+    "cubbyId": "cubby-86ee540a",
+    "alias": "hiring_widgets",
+    "instanceId": "default"
+  },
+  "query": {
+    "id": "top-signals-by-candidate",
+    "label": "Distilled top signals",
+    "sql": "SELECT payload FROM candidate_top_signals WHERE candidate_id = ? LIMIT 1",
+    "params": [
+      "cand_nathan_k"
+    ],
+    "timeoutMs": 5000,
+    "execution": "client.query.sql",
+    "refresh": {
+      "enabled": false
+    },
+    "urlParams": [
+      {
+        "name": "candidate_id",
+        "index": 0,
+        "type": "string"
+      }
+    ]
+  },
+  "render": {
+    "mode": "table"
+  }
+}
