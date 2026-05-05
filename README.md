@@ -4,6 +4,18 @@ Domain-agnostic intelligence engine with a **knowledge graph** layer. Extracts t
 
 **Live:** [hiring-pipeline.vercel.app](https://hiring-pipeline.vercel.app)
 
+## Where the code lives
+
+| Path | What it is | Deployed? |
+|---|---|---|
+| `ui/src/lib/compound-intelligence/` | **Production engine.** Extractor, Scorer, Distiller, Analyzer, PatternDiscovery, GraphIndexer, QueryEngine. This is what runs on Vercel. | ✅ |
+| `ui/src/lib/agents/` | Legacy 5-agent pipeline (concierge, trait-extractor, scorer, distillation, transcript-analyzer) wired through `ui/src/lib/runtime.ts`. | ✅ |
+| `ui/src/app/api/` | Next.js API routes that expose the engine (`/api/v1/extract`, `/api/v1/score`, `/api/v1/distill`, etc.) | ✅ |
+| `src/agents/` | **Prototype only.** Kept for the nightly Replay Harness (`scripts/replay-harness.ts`) regression tests. Do not use for new work. | ❌ |
+| `scripts/replay-harness.ts` | Nightly regression harness, runs against the prototype agents above. | CI only |
+
+**Looking for the deployed code? Start in `ui/src/lib/compound-intelligence/agents/`.**
+
 ## Architecture
 
 ```
