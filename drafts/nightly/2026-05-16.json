@@ -1,0 +1,677 @@
+[
+  {
+    "candidateId": "cand-finn-theuerkauff",
+    "name": "Finn Theuerkauff",
+    "role": "Founder's Associate",
+    "notionStatus": "Initial Evaluation Call",
+    "aiScoreWas": 9,
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-finn-theuerkauff-baseline",
+          "skills": [
+            "Business Development",
+            "Go-to-Market Strategy",
+            "Operations",
+            "Hiring",
+            "Technical Writing",
+            "Python",
+            "SQL",
+            "React"
+          ],
+          "years_of_experience": 4,
+          "company_stages": [
+            "startup",
+            "series_a",
+            "growth"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "TU Munich"
+            ],
+            "rating": 7
+          },
+          "hard_things_done": {
+            "items": [
+              "Founding team at Series A SaaS (sold, exit)"
+            ],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [
+              "Fintech",
+              "Dev Tools",
+              "SaaS"
+            ],
+            "rating": 7
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:34.111Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 54.17,
+          "blockchain_engineer_priors": 52.42
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-finn-theuerkauff-depth-over-breadth",
+          "skills": [
+            "Business Development",
+            "Go-to-Market Strategy",
+            "Operations",
+            "Hiring",
+            "Python",
+            "SQL",
+            "React"
+          ],
+          "years_of_experience": 4,
+          "company_stages": [
+            "startup",
+            "series_a"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "TU Munich"
+            ],
+            "rating": 6
+          },
+          "hard_things_done": {
+            "items": [
+              "Founding team at a Series A SaaS (sold, exit)"
+            ],
+            "rating": 7
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [
+              "Series A SaaS"
+            ],
+            "rating": 6
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:35.942Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 46.67,
+          "blockchain_engineer_priors": 45.67
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 9,
+      "weight_set_before": "blockchain_engineer_priors",
+      "weight_shifts": {
+        "skills": 0.024,
+        "years_of_experience": -0.018667,
+        "company_stages": 0.02,
+        "education_level": 0.008,
+        "schools": 0.016,
+        "hard_things_done": 0.024,
+        "hackathons": -0.04,
+        "open_source_contributions": -0.04,
+        "company_signals": 0.016
+      }
+    }
+  },
+  {
+    "candidateId": "cand-alexandros-sivris",
+    "name": "Alexandros Sivris",
+    "role": "Blockchain Engineer",
+    "notionStatus": "Company Rejected",
+    "aiScoreWas": 2,
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-alexandros-sivris-baseline",
+          "skills": [
+            "TypeScript",
+            "React",
+            "Node.js",
+            "PostgreSQL",
+            "AWS",
+            "Kubernetes",
+            "Microservices",
+            "SaaS",
+            "Health-tech"
+          ],
+          "years_of_experience": 8,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "Athens University"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [
+              "Led migration of core platform from monolith to microservices"
+            ],
+            "rating": 7
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:38.206Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 45.33,
+          "blockchain_engineer_priors": 46.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-alexandros-sivris-depth-over-breadth",
+          "skills": [
+            "TypeScript",
+            "React",
+            "Node",
+            "Postgres",
+            "AWS",
+            "Kubernetes",
+            "Microservices",
+            "SaaS"
+          ],
+          "years_of_experience": 8,
+          "company_stages": [
+            "series_b",
+            "startup"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "Athens University"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [
+              "Led migration of core platform from monolith to microservices (AWS, Kubernetes)"
+            ],
+            "rating": 7
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:39.751Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 43.83,
+          "blockchain_engineer_priors": 45.83
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 3,
+      "weight_set_before": "blockchain_engineer_priors",
+      "weight_shifts": {
+        "skills": -0.016,
+        "years_of_experience": -0.001333,
+        "company_stages": 0,
+        "education_level": -0.004,
+        "schools": 0,
+        "hard_things_done": -0.008,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.02,
+        "company_signals": 0.02
+      }
+    }
+  },
+  {
+    "candidateId": "cand-benhur-davies",
+    "name": "Benhur Davies",
+    "role": "Blockchain Engineer",
+    "notionStatus": "Company Rejected",
+    "aiScoreWas": 2,
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-benhur-davies-baseline",
+          "skills": [
+            "Go",
+            "Python",
+            "React",
+            "Kafka",
+            "AWS",
+            "Full Stack Development",
+            "Infrastructure"
+          ],
+          "years_of_experience": 12,
+          "company_stages": [
+            "series_c",
+            "growth",
+            "public"
+          ],
+          "education_level": "Masters",
+          "schools": {
+            "items": [
+              "Imperial College London"
+            ],
+            "rating": 9
+          },
+          "hard_things_done": {
+            "items": [
+              "Shipped real-time trading infrastructure handling 50k RPS"
+            ],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [
+              "2 minor OSS projects"
+            ],
+            "rating": 2
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:42.471Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 57,
+          "blockchain_engineer_priors": 59.25
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-benhur-davies-depth-over-breadth",
+          "skills": [
+            "Go",
+            "Python",
+            "React",
+            "Kafka",
+            "AWS",
+            "Full Stack Development",
+            "Real-time Trading Infrastructure"
+          ],
+          "years_of_experience": 12,
+          "company_stages": [
+            "series_c",
+            "growth",
+            "public"
+          ],
+          "education_level": "Masters",
+          "schools": {
+            "items": [
+              "Imperial College London"
+            ],
+            "rating": 9
+          },
+          "hard_things_done": {
+            "items": [
+              "Shipped real-time trading infrastructure handling 50k RPS"
+            ],
+            "rating": 8
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [
+              "2 minor OSS projects"
+            ],
+            "rating": 2
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:46.759Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 57,
+          "blockchain_engineer_priors": 59.25
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 3,
+      "weight_set_before": "blockchain_engineer_priors",
+      "weight_shifts": {
+        "skills": -0.008,
+        "years_of_experience": -0.012,
+        "company_stages": -0.01,
+        "education_level": -0.012,
+        "schools": -0.016,
+        "hard_things_done": -0.012,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.012,
+        "company_signals": 0.02
+      }
+    }
+  },
+  {
+    "candidateId": "cand-bhavin-chandarana",
+    "name": "Bhavin Chandarana",
+    "role": "Blockchain Engineer",
+    "notionStatus": "Company Rejected",
+    "aiScoreWas": 2,
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-bhavin-chandarana-baseline",
+          "skills": [
+            "C++",
+            "Python",
+            "AWS",
+            "Terraform",
+            "IoT",
+            "embedded systems",
+            "software engineering",
+            "DevOps"
+          ],
+          "years_of_experience": 14,
+          "company_stages": [
+            "startup",
+            "series_a",
+            "series_b",
+            "growth",
+            "public",
+            "enterprise"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "University of Mumbai"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 0
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:04:49.467Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 42.33,
+          "blockchain_engineer_priors": 27.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-bhavin-chandarana-depth-over-breadth",
+          "skills": [
+            "C++",
+            "Python",
+            "AWS",
+            "Terraform",
+            "IoT",
+            "Embedded Systems",
+            "DevOps"
+          ],
+          "years_of_experience": 14,
+          "company_stages": [
+            "startup",
+            "series_a",
+            "series_b",
+            "growth",
+            "public",
+            "enterprise"
+          ],
+          "education_level": "Bachelors",
+          "schools": {
+            "items": [
+              "University of Mumbai"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 0
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:05:00.997Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 40.83,
+          "blockchain_engineer_priors": 26.83
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 3,
+      "weight_set_before": "blockchain_engineer_priors",
+      "weight_shifts": {
+        "skills": -0.012,
+        "years_of_experience": -0.017333,
+        "company_stages": -0.02,
+        "education_level": -0.004,
+        "schools": 0,
+        "hard_things_done": 0.02,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.02,
+        "company_signals": 0.02
+      }
+    }
+  },
+  {
+    "candidateId": "cand-benjamin-elliott",
+    "name": "Benjamin Elliott",
+    "role": "Blockchain Engineer",
+    "notionStatus": "Company Rejected",
+    "aiScoreWas": 2,
+    "passes": [
+      {
+        "variant": "baseline",
+        "traits": {
+          "candidate_id": "cand-benjamin-elliott-baseline",
+          "skills": [
+            "JavaScript",
+            "React",
+            "Node"
+          ],
+          "years_of_experience": 2,
+          "company_stages": [],
+          "education_level": "None",
+          "schools": {
+            "items": [],
+            "rating": 0
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 0
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:05:01.727Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 8.83,
+          "blockchain_engineer_priors": 5.83
+        }
+      },
+      {
+        "variant": "depth-over-breadth",
+        "traits": {
+          "candidate_id": "cand-benjamin-elliott-depth-over-breadth",
+          "skills": [
+            "JavaScript",
+            "React",
+            "Node.js"
+          ],
+          "years_of_experience": 2,
+          "company_stages": [
+            "startup",
+            "growth"
+          ],
+          "education_level": "None",
+          "schools": {
+            "items": [
+              "General Assembly"
+            ],
+            "rating": 5
+          },
+          "hard_things_done": {
+            "items": [],
+            "rating": 0
+          },
+          "hackathons": {
+            "items": [],
+            "rating": 0
+          },
+          "open_source_contributions": {
+            "items": [],
+            "rating": 0
+          },
+          "company_signals": {
+            "items": [],
+            "rating": 0
+          },
+          "conclusive_score": 0,
+          "source_completeness": {
+            "has_resume": true,
+            "has_linkedin": false
+          },
+          "extracted_at": "2026-05-16T07:05:02.616Z"
+        },
+        "scoreByWeightSet": {
+          "generalist_baseline": 18.83,
+          "blockchain_engineer_priors": 10.83
+        }
+      }
+    ],
+    "feedback": {
+      "human_score": 3,
+      "weight_set_before": "blockchain_engineer_priors",
+      "weight_shifts": {
+        "skills": 0.008,
+        "years_of_experience": 0.014667,
+        "company_stages": 0.02,
+        "education_level": 0.008,
+        "schools": 0.02,
+        "hard_things_done": 0.02,
+        "hackathons": 0.02,
+        "open_source_contributions": 0.02,
+        "company_signals": 0.02
+      }
+    }
+  }
+]
