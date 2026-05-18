@@ -1,18 +1,8 @@
 import { Event, Context } from './types';
+import { getModelConfig, getProviderDisplayName } from './model-provider';
 
 export async function handle(event: Event, context: Context) {
     return analyze(event.payload, context);
-}
-
-function geminiEndpoint(): string {
-    return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-}
-
-function geminiHeaders(): Record<string, string> {
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`,
-    };
 }
 
 function extractJson(raw: string): any {
@@ -31,7 +21,9 @@ export async function analyze(payload: any, context: Context) {
     }
 
     context.log('Starting Transcript Analysis for candidate:', candidateId);
-    context.log('Calling Gemini 2.5 Flash for semantic interview analysis...');
+    
+    const modelConfig = getModelConfig();
+    context.log(`Calling ${getProviderDisplayName()} for semantic interview analysis...`);
 
     const systemPrompt = `You are an elite talent evaluator. Analyze this interview transcript for a ${role} candidate.
 
@@ -56,11 +48,11 @@ Return ONLY this exact JSON object. No markdown. No explanation.
 Score honestly. 0 = none demonstrated, 5 = adequate, 10 = exceptional.
 startup_fit axes: action_speed = bias toward action & shipping fast, autonomy = self-directed work, judgment = decision quality under ambiguity, communication = clarity & persuasion, coachability = openness to feedback, drive_grit = persistence & hunger.`;
 
-    const response = await context.fetch(geminiEndpoint(), {
+    const response = await context.fetch(modelConfig.endpoint, {
         method: 'POST',
-        headers: geminiHeaders(),
+        headers: modelConfig.headers,
         body: JSON.stringify({
-            model: 'gemini-2.5-flash',
+            model: modelConfig.model,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Role: ${role}\n\nInterview Transcript:\n${transcriptText.slice(0, 6000)}` }
@@ -70,7 +62,7 @@ startup_fit axes: action_speed = bias toward action & shipping fast, autonomy = 
     });
 
     if (!response.ok) {
-        throw new Error(`Gemini API error ${response.status}: ${JSON.stringify(response.data)}`);
+        throw new Error(`${modelConfig.provider} API error ${response.status}: ${JSON.stringify(response.data)}`);
     }
 
     const rawContent = response.data.choices[0].message.content;
