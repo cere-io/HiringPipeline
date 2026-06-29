@@ -1,18 +1,8 @@
 import { Event, Context, TraitWeights, CandidateScore, CandidateTraits } from './types';
+import { getModelConfig, getProviderDisplayName } from './model-provider';
 
 export async function handle(event: Event, context: Context) {
     return score(event.payload, context);
-}
-
-function geminiEndpoint(): string {
-    return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-}
-
-function geminiHeaders(): Record<string, string> {
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`,
-    };
 }
 
 function extractJson(raw: string): any {
@@ -61,7 +51,8 @@ export async function score(payload: any, context: Context) {
         company_signals_rating: traits.company_signals.rating
     };
 
-    context.log('Calling Gemini 2.5 Flash for composite scoring...');
+    const modelConfig = getModelConfig();
+    context.log(`Calling ${getProviderDisplayName()} for composite scoring...`);
 
     const prompt = `You are a hiring scoring engine.
 
@@ -72,11 +63,11 @@ Role weights (each weight = importance of that signal, all sum to 1.0): ${JSON.s
 Score this candidate 0-100 by applying the weights to each signal. Return ONLY this JSON:
 {"composite_score": <number 0-100>, "reasoning": "<one concise sentence>"}`;
 
-    const response = await context.fetch(geminiEndpoint(), {
+    const response = await context.fetch(modelConfig.endpoint, {
         method: 'POST',
-        headers: geminiHeaders(),
+        headers: modelConfig.headers,
         body: JSON.stringify({
-            model: 'gemini-2.5-flash',
+            model: modelConfig.model,
             messages: [
                 { role: 'system', content: 'You are a precise scoring engine. Output only valid JSON, nothing else.' },
                 { role: 'user', content: prompt }
@@ -86,7 +77,7 @@ Score this candidate 0-100 by applying the weights to each signal. Return ONLY t
     });
 
     if (!response.ok) {
-        throw new Error(`Gemini API error ${response.status}: ${JSON.stringify(response.data)}`);
+        throw new Error(`${modelConfig.provider} API error ${response.status}: ${JSON.stringify(response.data)}`);
     }
 
     const raw = response.data.choices[0].message.content;
